@@ -1,0 +1,12 @@
+{
+  "name": "corpgroup.com",
+  "short_name": "corpgroup",
+  "description": "Attendance, leave, payslips, tasks and chat for your workplace",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#4338ca",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

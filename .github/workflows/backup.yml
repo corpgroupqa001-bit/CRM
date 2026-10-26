@@ -1,0 +1,20 @@
+# NFR-08: Supabase Free has no automatic backups. Nightly pg_dump, encrypted, kept 30 days as an artifact.
+name: Nightly backup
+on:
+  schedule: [{ cron: "30 21 * * *" }]   # 03:00 IST
+  workflow_dispatch:
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Dump and encrypt
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          f="corpgroup-$(date -u +%Y%m%d).dump"
+          pg_dump "$DATABASE_URL" --format=custom --no-owner --schema=public --schema=auth --schema=storage -f "$f"
+          gpg --batch --symmetric --cipher-algo AES256 --passphrase "$BACKUP_PASSPHRASE" "$f"
+      - uses: actions/upload-artifact@v4
+        with: { name: db-backup, path: "*.dump.gpg", retention-days: 30 }

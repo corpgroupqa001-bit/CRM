@@ -1,0 +1,5 @@
+# Minimal Supabase CLI config. Link to the hosted project with:  npx supabase link --project-ref <ref>
+project_id = "corpgroup"
+
+[functions.punch-webhook]
+verify_jwt = false

@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* corpgroup.com design tokens: neutral slate surfaces, one indigo accent, Inter. */
+@theme {
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #1e1b4b;
+  --color-canvas: #f6f7f9;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.03);
+  --shadow-pop: 0 10px 30px -10px rgb(15 23 42 / 0.25), 0 4px 10px -4px rgb(15 23 42 / 0.08);
+}
+
+:root { color-scheme: light; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { background: var(--color-canvas); color: #0f172a; font-feature-settings: "cv11", "ss01"; }
+::selection { background: var(--color-brand-100); }
+:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+
+/* form controls */
+@utility input {
+  @apply h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-[0_1px_1px_rgb(15_23_42/0.03)]
+    outline-none transition placeholder:text-slate-400 hover:border-slate-300
+    focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500;
+}
+textarea.input, select[multiple].input { @apply h-auto py-2; }
+input[type="file"].input { @apply h-auto py-1.5 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-slate-700; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--color-brand-600); width: 1rem; height: 1rem; }
+@utility label { @apply mb-1.5 block text-[13px] font-medium text-slate-700; }
+
+/* buttons */
+@utility btn {
+  @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-sm font-medium transition
+    active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+}
+@utility btn-primary { @apply btn bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700; }
+@utility btn-secondary { @apply btn border border-slate-200 bg-white text-slate-700 shadow-[0_1px_1px_rgb(15_23_42/0.04)] hover:border-slate-300 hover:bg-slate-50; }
+@utility btn-danger { @apply btn bg-rose-600 text-white shadow-sm hover:bg-rose-700; }
+@utility btn-ghost { @apply btn text-slate-600 hover:bg-slate-100 hover:text-slate-900; }
+@utility btn-sm { @apply h-8 px-2.5 text-[13px]; }
+
+/* surfaces */
+@utility card { @apply rounded-xl border border-slate-200/80 bg-white shadow-(--shadow-card); }
+
+/* tables */
+@utility th { @apply whitespace-nowrap px-4 py-2.5 text-left text-xs font-medium text-slate-500; }
+@utility td { @apply px-4 py-3 text-sm text-slate-700; }
+
+/* tiny scrollbars inside panels */
+.thin-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+
+/* print / "Save as PDF" for reports: only the page content, no navigation */
+@media print {
+  @page { margin: 12mm; }
+  body { background: #fff; }
+  aside, header.sticky, .no-print, nav[class*="border-b"] form, form button { display: none !important; }
+  .lg\:pl-64 { padding-left: 0 !important; }
+  main { max-width: none !important; padding: 0 !important; }
+  .card { box-shadow: none !important; break-inside: avoid; }
+  a { color: inherit !important; text-decoration: none !important; }
+}

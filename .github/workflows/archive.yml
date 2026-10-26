@@ -1,0 +1,18 @@
+# NFR-09: monthly archive of raw punches older than 13 months to Supabase Storage
+name: Archive old punches
+on:
+  schedule: [{ cron: "0 22 2 * *" }]   # 2nd of each month, 03:30 IST
+  workflow_dispatch:
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm archive:punches --apply
