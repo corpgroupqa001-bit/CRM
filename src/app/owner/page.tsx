@@ -48,9 +48,9 @@ export default async function OwnerPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="min-h-screen">
-      <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6">
+      <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-surface px-6">
         <div className="flex items-center gap-2 font-semibold text-brand-900">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-xs text-white">cg</span>corpgroup.com
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-xs text-white">cg</span>corpgroup.com
         </div>
         <div className="flex items-center gap-2">
           <Link href="/account" className="btn-ghost">Account</Link>

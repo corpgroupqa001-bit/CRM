@@ -60,26 +60,49 @@ export default async function Employees({ params, searchParams }: { params: Prom
         </>} />
       <SavedFilters cid={cid} page="employees" query={new URLSearchParams(Object.entries(sp).filter(([k, v]) => v && k !== "new") as [string, string][]).toString()} />
       <Card pad={false} title={
-        <form className="flex flex-wrap gap-2">
-          <input name="q" defaultValue={sp.q} placeholder="Search name, code or email" className="input w-64" />
-          <select name="department" defaultValue={sp.department ?? ""} className="input w-44"><option value="">All departments</option>{(deps ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
-          <select name="branch" defaultValue={sp.branch ?? ""} className="input w-40"><option value="">All branches</option>{(branches ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
-          <select name="status" defaultValue={sp.status ?? "active"} className="input w-36">
-            {["active", "notice", "exited", "inactive"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}</select>
+        <form className="flex flex-wrap items-center gap-2">
+          <input name="q" defaultValue={sp.q} placeholder="Search name, code or email" className="input min-w-0 flex-[1_1_240px] sm:max-w-72" aria-label="Search employees" />
+          <select name="department" defaultValue={sp.department ?? ""} className="input w-[calc(50%-4px)] sm:w-48" aria-label="Department"><option value="">All departments</option>{(deps ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+          <select name="branch" defaultValue={sp.branch ?? ""} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Branch"><option value="">All branches</option>{(branches ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+          <fieldset className="flex flex-wrap gap-1.5" aria-label="Status">
+            {["active", "notice", "exited", "inactive"].map((st) => (
+              <label key={st} className="cursor-pointer">
+                <input type="radio" name="status" value={st} defaultChecked={(sp.status ?? "active") === st} className="peer sr-only" />
+                <span className="inline-flex h-8 items-center rounded-full border border-slate-200 px-3 text-[13px] font-medium text-slate-600 transition hover:border-slate-300 peer-checked:border-transparent peer-checked:bg-brand-50 peer-checked:text-brand-700 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500">{st[0].toUpperCase() + st.slice(1)}</span>
+              </label>
+            ))}
+          </fieldset>
           <button className="btn-secondary">Filter</button>
         </form>
       }>
-        <Table head={["Employee", "Code", "Department", "Designation", "Branch", "Joined", "Status"]} empty="No employees match these filters.">
+        <div className="hidden md:block">
+          <Table head={["Employee", "Code", "Department", "Designation", "Branch", "Joined", "Status"]} empty="No employees match these filters.">
+            {(rows ?? []).map((e) => (
+              <tr key={e.id}>
+                <td className="td"><Link href={`/c/${cid}/employees/${e.id}`} className="flex items-center gap-2.5 font-medium text-slate-900 hover:underline">
+                  <Avatar name={e.full_name} url={e.photo_url} size={32} />{e.full_name}</Link>
+                  <div className="pl-[42px] text-xs text-slate-500">{e.email}</div></td>
+                <td className="td">{e.emp_code}</td><td className="td">{e.department ?? "—"}</td><td className="td">{e.designation ?? "—"}</td>
+                <td className="td">{e.branch ?? "—"}</td><td className="td">{fmtDate(doj.get(e.id))}</td><td className="td"><Badge value={e.status} /></td>
+              </tr>
+            ))}
+          </Table>
+        </div>
+        <ul className="divide-y divide-slate-100 md:hidden">
           {(rows ?? []).map((e) => (
-            <tr key={e.id} className="hover:bg-slate-50">
-              <td className="td"><Link href={`/c/${cid}/employees/${e.id}`} className="flex items-center gap-2 font-medium text-slate-900 hover:underline">
-                <Avatar name={e.full_name} url={e.photo_url} size={28} />{e.full_name}</Link>
-                <div className="pl-9 text-xs text-slate-500">{e.email}</div></td>
-              <td className="td">{e.emp_code}</td><td className="td">{e.department ?? "—"}</td><td className="td">{e.designation ?? "—"}</td>
-              <td className="td">{e.branch ?? "—"}</td><td className="td">{fmtDate(doj.get(e.id))}</td><td className="td"><Badge value={e.status} /></td>
-            </tr>
+            <li key={e.id}>
+              <Link href={`/c/${cid}/employees/${e.id}`} className="flex items-center gap-3 px-4 py-3.5 active:bg-slate-50">
+                <Avatar name={e.full_name} url={e.photo_url} size={40} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-slate-900">{e.full_name}</span>
+                  <span className="block truncate text-xs text-slate-500">{[e.designation, e.department].filter(Boolean).join(" · ") || e.email}</span>
+                </span>
+                <Badge value={e.status} />
+              </Link>
+            </li>
           ))}
-        </Table>
+          {!(rows ?? []).length && <li className="px-4 py-12 text-center text-sm text-slate-500">No employees match these filters.</li>}
+        </ul>
         {(count ?? 0) > PAGE && (
           <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
             <span className="text-slate-500">Page {page} of {Math.ceil((count ?? 0) / PAGE)}</span>

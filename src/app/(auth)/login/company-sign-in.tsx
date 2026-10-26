@@ -61,8 +61,8 @@ export async function CompanySignIn({ mode, next, pending, portal = "company", b
         Request sent. An administrator of your company will check your details; you can sign in once you&apos;re approved.</p>}
       {!current && codes && (
         <div className="mt-6 grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-sm font-medium">
-          <Link href={q()} className={`rounded-md py-1.5 text-center transition ${!otp ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Password</Link>
-          <Link href={q("otp")} className={`rounded-md py-1.5 text-center transition ${otp ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Email code</Link>
+          <Link href={q()} className={`rounded-md py-1.5 text-center transition ${!otp ? "bg-surface text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Password</Link>
+          <Link href={q("otp")} className={`rounded-md py-1.5 text-center transition ${otp ? "bg-surface text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Email code</Link>
         </div>
       )}
       {current ? null : otp ? (

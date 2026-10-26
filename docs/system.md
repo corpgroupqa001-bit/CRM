@@ -473,6 +473,14 @@ All settings are environment variables. Copy `.env.example` to `.env.local`.
 
 GitHub Actions secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`, `BACKUP_PASSPHRASE`.
 
+### UI, design tokens and themes
+
+- **Tokens** live in `src/app/globals.css` (Tailwind v4 `@theme`): indigo `brand-*`, slate neutrals, Inter, and the shared `input`, `label`, `btn-*`, `card`, `th`/`td` utilities. Shared building blocks are in `src/components/ui.tsx` (PageHeader, Card, Stat, Badge, Table, Tabs, Empty, Avatar), `shell.tsx` (sidebar, top bar, profile menu, phone bottom bar) and `sheet.tsx` (side panel / phone bottom sheet for row actions).
+- **Light / Dark**: each person picks a theme in the profile menu (or the sun/moon button in the top bar and on the sign-in pages). `src/components/theme-toggle.tsx` applies it at once and saves the `cg_theme` cookie (one year, `SameSite=Lax`); the root layout reads the cookie and renders `<html class="dark">`, so pages open in the chosen theme without a flash. Default: light.
+- **How dark works**: pages keep using the Tailwind palette. Under `html.dark`, `globals.css` remaps it: neutrals invert, tints (`*-50…200`) become dark washes and deep shades (`*-600…900`) become light, so existing classes stay readable. Solid fills that must not flip use fixed tokens: `bg-surface` (cards, inputs), `bg-accent` / `bg-accent-hover` (primary buttons, counters), `bg-danger`, `bg-hero` (sign-in panel), `bg-scrim` (overlays). Use those for new solid fills instead of `bg-white` or `bg-brand-600`. Charts (`charts.tsx`) switch palette in JS because SVG attributes can't read CSS variables. Printing always uses the light theme.
+- **Contrast**: body text, muted text (`slate-500`) and placeholders meet WCAG 2.2 AA (4.5:1) in both themes; use `slate-400` only for icons, never for text.
+- **Phones**: below 1024 px the sidebar becomes a drawer and a bottom bar shows Home plus up to three of Attendance, Employees, Tasks and Chat (whatever the role can open), and More. Wide tables on the priority pages (employees, daily attendance) switch to card lists below 768 px; other tables scroll inside their card.
+
 ---
 
 ## 13. Development workflow

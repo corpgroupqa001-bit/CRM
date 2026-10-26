@@ -58,7 +58,7 @@ export function TwoFactor() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={enroll.qr} alt="QR code for your authenticator app" className="h-40 w-40 rounded-lg border border-slate-200 bg-white p-2" />
+          <img src={enroll.qr} alt="QR code for your authenticator app" className="h-40 w-40 rounded-lg border border-slate-200 bg-surface p-2" />
           <div className="space-y-3 text-sm">
             <p>1. Scan the QR code with your authenticator app, or enter this key: <code className="break-all rounded bg-slate-100 px-1.5 py-0.5 text-xs">{enroll.secret}</code></p>
             <p>2. Enter the 6-digit code it shows:</p>

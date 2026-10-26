@@ -34,9 +34,9 @@ function LinkPreview({ url, mine }: { url: string; mine: boolean }) {
         <img src={p.image} alt="" className="max-h-36 w-full object-cover" />
       )}
       <div className="px-2.5 py-2">
-        <div className={`text-[11px] ${mine ? "text-brand-100" : "text-slate-500"}`}>{p.host}</div>
+        <div className={`text-[11px] ${mine ? "text-white/80" : "text-slate-500"}`}>{p.host}</div>
         <div className="line-clamp-2 text-sm font-medium">{p.title}</div>
-        {p.description && <div className={`line-clamp-2 text-xs ${mine ? "text-brand-100" : "text-slate-500"}`}>{p.description}</div>}
+        {p.description && <div className={`line-clamp-2 text-xs ${mine ? "text-white/80" : "text-slate-500"}`}>{p.description}</div>}
       </div>
     </a>
   );
@@ -213,7 +213,7 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
   const jump = (id: string) => document.getElementById(`m-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   const snippet = (m?: Msg) => (m ? (m.deleted ? "Deleted message" : m.body ?? `📎 ${m.attachment_name}`) : "Original message");
   const Act = ({ title: t, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) => (
-    <button title={t} aria-label={t} onClick={onClick} className="rounded p-1 text-slate-400 hover:bg-white hover:text-slate-700">{children}</button>
+    <button title={t} aria-label={t} onClick={onClick} className="rounded p-1 text-slate-500 hover:bg-surface hover:text-slate-700">{children}</button>
   );
 
   return (
@@ -233,7 +233,7 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
       {pinned.length > 0 && !showStarred && (
         <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 bg-amber-50/60 px-4 py-2 text-xs">
           <Pin className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-          {pinned.map((m) => <button key={m.id} onClick={() => jump(m.id)} className="max-w-64 shrink-0 truncate rounded-md bg-white px-2 py-1 text-slate-700 ring-1 ring-amber-200 hover:ring-amber-300">{snippet(m)}</button>)}
+          {pinned.map((m) => <button key={m.id} onClick={() => jump(m.id)} className="max-w-64 shrink-0 truncate rounded-md bg-surface px-2 py-1 text-slate-700 ring-1 ring-amber-200 hover:ring-amber-300">{snippet(m)}</button>)}
         </div>
       )}
       <div className="thin-scroll flex-1 space-y-1 overflow-y-auto bg-slate-50 px-4 py-4">
@@ -246,11 +246,11 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
           const parent = m.reply_to_id ? byId.get(m.reply_to_id) : undefined;
           return (
             <div key={m.id} id={`m-${m.id}`} className={`group flex items-center gap-1 ${mine ? "flex-row-reverse" : ""}`}>
-              <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm ${mine ? "bg-brand-600 text-white" : "bg-white text-slate-800"}`}>
+              <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm ${mine ? "bg-accent text-white" : "bg-surface text-slate-800"}`}>
                 {showName && <div className="mb-0.5 text-xs font-semibold text-brand-700">{names[m.sender_id] ?? "Someone"}</div>}
-                {m.forwarded && !m.deleted && <div className={`mb-0.5 flex items-center gap-1 text-[11px] italic ${mine ? "text-brand-100" : "text-slate-500"}`}><Forward className="h-3 w-3" /> Forwarded</div>}
+                {m.forwarded && !m.deleted && <div className={`mb-0.5 flex items-center gap-1 text-[11px] italic ${mine ? "text-white/80" : "text-slate-500"}`}><Forward className="h-3 w-3" /> Forwarded</div>}
                 {m.reply_to_id && !m.deleted && (
-                  <button onClick={() => parent && jump(parent.id)} className={`mb-1.5 block w-full rounded-md border-l-2 px-2 py-1 text-left text-xs ${mine ? "border-white/60 bg-white/10 text-brand-50" : "border-brand-400 bg-slate-100 text-slate-600"}`}>
+                  <button onClick={() => parent && jump(parent.id)} className={`mb-1.5 block w-full rounded-md border-l-2 px-2 py-1 text-left text-xs ${mine ? "border-white/60 bg-white/10 text-white/85" : "border-brand-400 bg-slate-100 text-slate-600"}`}>
                     <span className="block font-semibold">{parent ? names[parent.sender_id] ?? "Someone" : ""}</span>
                     <span className="line-clamp-2">{snippet(parent)}</span>
                   </button>
@@ -267,7 +267,7 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
                   {m.body && <p className="whitespace-pre-wrap break-words">{linkify(m.body)}</p>}
                   {link && <LinkPreview url={link} mine={mine} />}
                 </>}
-                <div className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-brand-100" : "text-slate-400"}`} title={fmtDateTime(m.created_at)}>
+                <div className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-white/80" : "text-slate-500"}`} title={fmtDateTime(m.created_at)}>
                   {m.pinned_at && <Pin className="h-3 w-3" />}{stars.has(m.id) && <Star className="h-3 w-3 fill-current" />}
                   {m.edited_at && "edited ·"} {fmtTime(m.created_at)}
                   {mine && !m.deleted && (seenByAll(m) ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />)}
@@ -279,7 +279,7 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
                   <Act title="Forward" onClick={() => setForwarding(m)}><Forward className="h-3.5 w-3.5" /></Act>
                   <Act title={m.pinned_at ? "Unpin" : "Pin"} onClick={() => togglePin(m)}>{m.pinned_at ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}</Act>
                   <Act title={stars.has(m.id) ? "Unstar" : "Star"} onClick={() => toggleStar(m)}><Star className={`h-3.5 w-3.5 ${stars.has(m.id) ? "fill-amber-400 text-amber-500" : ""}`} /></Act>
-                  {m.body && <Link title="Create task" aria-label="Create task" href={`/c/${cid}/tasks?new=1&from_message=${m.id}&text=${encodeURIComponent(m.body.slice(0, 500))}`} className="rounded p-1 text-slate-400 hover:bg-white hover:text-slate-700"><ListPlus className="h-3.5 w-3.5" /></Link>}
+                  {m.body && <Link title="Create task" aria-label="Create task" href={`/c/${cid}/tasks?new=1&from_message=${m.id}&text=${encodeURIComponent(m.body.slice(0, 500))}`} className="rounded p-1 text-slate-500 hover:bg-surface hover:text-slate-700"><ListPlus className="h-3.5 w-3.5" /></Link>}
                   {canEdit(m) && m.body && <Act title="Edit" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body!); }}><Pencil className="h-3.5 w-3.5" /></Act>}
                   {mine && <Act title="Delete for everyone" onClick={() => { supabase.from("messages").update({ deleted: true }).eq("id", m.id).then(({ error }) => error && setErr(error.message)); }}><Trash2 className="h-3.5 w-3.5" /></Act>}
                 </div>
@@ -289,7 +289,7 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
         })}
         <div ref={bottom} />
       </div>
-      <form onSubmit={send} className="border-t border-slate-200 bg-white p-3">
+      <form onSubmit={send} className="border-t border-slate-200 bg-surface p-3">
         {(editing || replyTo) && (
           <div className="mb-2 flex items-start justify-between gap-2 rounded-lg border-l-2 border-brand-500 bg-slate-50 px-3 py-1.5 text-xs">
             <span className="min-w-0"><b className="text-brand-700">{editing ? "Editing message" : `Replying to ${names[replyTo!.sender_id] ?? "message"}`}</b>
@@ -314,8 +314,8 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
         </div>
       </form>
       {forwarding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4" onClick={() => setForwarding(null)}>
-          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-(--shadow-pop)" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim px-4" onClick={() => setForwarding(null)}>
+          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-surface shadow-(--shadow-pop)" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Forward to…</div>
             <ul className="thin-scroll max-h-80 overflow-y-auto p-1.5">
               {forwardTargets.map((t) => <li key={t.id}><button onClick={() => forwardTo(t.id)} className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100">{t.name}</button></li>)}

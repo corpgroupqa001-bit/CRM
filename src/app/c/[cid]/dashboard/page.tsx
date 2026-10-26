@@ -184,12 +184,14 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
           <section className="grid gap-4 lg:grid-cols-3">
             <Card title="Today" actions={<Link href={`${base}/attendance/me`} className="text-xs font-medium text-brand-600 hover:text-brand-700">My attendance →</Link>}>
               <div className="flex items-center gap-3">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600"><Fingerprint className="h-5 w-5" /></span>
-                {myDay ? (
-                  <div className="text-sm"><Badge value={myDay.status} /><div className="mt-1 text-slate-600">In {fmtTime(myDay.first_in)} · Out {fmtTime(myDay.last_out)}</div></div>
-                ) : <div className="text-sm text-slate-500">No punch yet today.</div>}
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Fingerprint className="h-5 w-5" /></span>
+                {myDay ? <Badge value={myDay.status} /> : <span className="text-sm text-slate-500">No punch yet today.</span>}
               </div>
-              {employee.mobile_attendance && <Link href={`${base}/attendance/me`} className="btn-primary mt-4 w-full">Punch with selfie</Link>}
+              <dl className="mt-4 grid grid-cols-2 gap-2 text-center">
+                <div className="flex flex-col-reverse rounded-xl bg-slate-50 px-2 py-2.5"><dt className="text-xs text-slate-500">In</dt><dd className="text-lg font-semibold tabular-nums text-slate-900">{fmtTime(myDay?.first_in)}</dd></div>
+                <div className="flex flex-col-reverse rounded-xl bg-slate-50 px-2 py-2.5"><dt className="text-xs text-slate-500">Out</dt><dd className="text-lg font-semibold tabular-nums text-slate-900">{fmtTime(myDay?.last_out)}</dd></div>
+              </dl>
+              {employee.mobile_attendance && <Link href={`${base}/attendance/me`} className="btn-primary mt-4 h-11 w-full">Punch with selfie</Link>}
             </Card>
             {leaveOn && <Card title="Leave balance" actions={<Link href={`${base}/leave`} className="text-xs font-medium text-brand-600 hover:text-brand-700">Apply →</Link>}>
               {balances?.length ? (
@@ -225,7 +227,7 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
             </Card>
           </section>
         )}
-        {!employee && !team && <Empty title="Welcome" icon={Users}>Ask your admin to link your employee record.</Empty>}
+        {!employee && !team && <Empty title={`Welcome to ${company.name}`} icon={Users}>Your account isn&apos;t linked to an employee record yet. Ask your HR Manager or administrator to link it; your attendance, tasks and payslips will then appear here.</Empty>}
         {team}
       </div>
     </>

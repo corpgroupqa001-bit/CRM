@@ -68,9 +68,9 @@ export default async function Tasks({ params, searchParams }: { params: Promise<
         {first.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}<Link href={qs({ month: ym(nextM) })} className="btn-ghost btn-sm">→</Link></span>}>
         <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 text-xs">
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="bg-slate-50 px-2 py-1.5 font-semibold text-slate-500">{d}</div>)}
-          {Array.from({ length: lead }, (_, i) => <div key={`x${i}`} className="min-h-24 bg-white/60" />)}
+          {Array.from({ length: lead }, (_, i) => <div key={`x${i}`} className="min-h-24 bg-surface/60" />)}
           {Array.from({ length: days }, (_, i) => (
-            <div key={i} className="min-h-24 bg-white p-1.5">
+            <div key={i} className="min-h-24 bg-surface p-1.5">
               <div className="mb-1 font-medium text-slate-500">{i + 1}</div>
               {(byDay.get(i + 1) ?? []).map((t) => (
                 <Link key={t.id} href={`/c/${cid}/tasks/${t.id}`} className={`mb-1 block truncate rounded px-1.5 py-0.5 ${t.status === "done" ? "bg-emerald-50 text-emerald-700 line-through" : t.due_at! < now ? "bg-rose-50 text-rose-700" : "bg-brand-50 text-brand-700"}`}>{t.title}</Link>
@@ -192,13 +192,13 @@ export default async function Tasks({ params, searchParams }: { params: Promise<
         </Card>
       )}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
-          {views.map(([k, l]) => <Link key={k} href={qs({ view: k })} className={`rounded-md px-3 py-1 ${view === k ? "bg-white font-medium shadow-sm" : "text-slate-500"}`}>{l}</Link>)}
-        </div>
+        <nav aria-label="Task views" className="thin-scroll flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-surface p-1 text-sm shadow-(--shadow-card)">
+          {views.map(([k, l]) => <Link key={k} href={qs({ view: k })} aria-current={view === k ? "page" : undefined} className={`whitespace-nowrap rounded-[9px] px-3 py-1.5 font-medium ${view === k ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>{l}</Link>)}
+        </nav>
         <form className="flex flex-wrap gap-2">
           <input type="hidden" name="view" value={view} />
-          <input name="q" defaultValue={sp.q} placeholder="Search" className="input w-44" />
-          <select name="project" defaultValue={sp.project ?? ""} className="input w-44"><option value="">All projects</option>{(projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <input name="q" defaultValue={sp.q} placeholder="Search" className="input w-[calc(50%-4px)] sm:w-44" aria-label="Search tasks" />
+          <select name="project" defaultValue={sp.project ?? ""} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Project"><option value="">All projects</option>{(projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           {view === "list" && <select name="status" defaultValue={sp.status ?? ""} className="input w-36"><option value="">Any status</option>{BASE_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select>}
           <select name="filter" defaultValue={sp.filter ?? ""} className="input w-32"><option value="">All</option><option value="overdue">Overdue</option></select>
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="mine" value="1" defaultChecked={!!sp.mine} /> My tasks</label>

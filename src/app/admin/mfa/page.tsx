@@ -11,7 +11,7 @@ export default async function AdminMfaPage() {
   if (!user) redirect("/admin");
   if (!needsSecondFactor(user)) redirect("/admin");
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-5">
+    <div className="flex min-h-screen items-center justify-center bg-surface px-5">
       <div className="w-full max-w-sm">
         <span className="inline-flex rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">Admin portal</span>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">Enter your code</h1>

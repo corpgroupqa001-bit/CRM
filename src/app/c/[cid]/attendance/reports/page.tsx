@@ -35,8 +35,8 @@ export default async function Reports({ params, searchParams }: { params: Promis
   return (
     <>
       <PageHeader title="Attendance reports" actions={<>
-        <form className="flex gap-2"><input type="month" name="month" defaultValue={month} className="input w-44" />
-          <select name="view" defaultValue={sp.view ?? "summary"} className="input w-40"><option value="summary">Monthly summary</option><option value="muster">Muster roll</option><option value="late">Late-comers</option><option value="overtime">Overtime</option></select>
+        <form className="flex flex-wrap gap-2"><input type="month" name="month" defaultValue={month} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Month" />
+          <select name="view" defaultValue={sp.view ?? "summary"} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Report"><option value="summary">Monthly summary</option><option value="muster">Muster roll</option><option value="late">Late-comers</option><option value="overtime">Overtime</option></select>
           <button className="btn-secondary">Show</button></form>
         <a className="btn-secondary" href={`/api/export/attendance?company=${cid}&month=${month}`}>Excel</a>
         <PrintButton />
@@ -63,7 +63,7 @@ export default async function Reports({ params, searchParams }: { params: Promis
               <tbody className="divide-y divide-slate-100">
                 {rows.map((p) => {
                   const m = new Map(by.get(p.id)!.map((a) => [Number(a.date.slice(8, 10)), SHORT[a.status] ?? "?"]));
-                  return <tr key={p.id}><td className="td sticky left-0 whitespace-nowrap bg-white">{p.full_name}</td>
+                  return <tr key={p.id}><td className="td sticky left-0 whitespace-nowrap bg-surface">{p.full_name}</td>
                     {Array.from({ length: days }, (_, i) => { const s = m.get(i + 1) ?? ""; return <td key={i} className={`px-1 py-2 text-center font-semibold ${COLOR[s] ?? ""}`}>{s}</td>; })}</tr>;
                 })}
               </tbody>

@@ -87,8 +87,8 @@ export default async function TaskPage({ params }: { params: Promise<{ cid: stri
               {(checklist ?? []).map((c) => (
                 <li key={c.id} className="group flex items-center gap-2 text-sm">
                   <form action={toggleChecklistItem.bind(null, cid, c.id, !c.done)}><button className={`inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] ${c.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-slate-400"}`} aria-label="Toggle">{c.done ? "✓" : ""}</button></form>
-                  <span className={`flex-1 ${c.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{c.item}</span>
-                  {canEdit && <form action={deleteChecklistItem.bind(null, cid, c.id)}><button className="text-xs text-slate-400 opacity-0 hover:text-rose-600 group-hover:opacity-100">Remove</button></form>}
+                  <span className={`flex-1 ${c.done ? "text-slate-500 line-through" : "text-slate-700"}`}>{c.item}</span>
+                  {canEdit && <form action={deleteChecklistItem.bind(null, cid, c.id)}><button className="text-xs text-slate-500 opacity-0 hover:text-rose-600 group-hover:opacity-100">Remove</button></form>}
                 </li>
               ))}
             </ul>
@@ -159,7 +159,7 @@ export default async function TaskPage({ params }: { params: Promise<{ cid: stri
               {(deps ?? []).map((d) => {
                 const b = d.tasks as unknown as { id: string; title: string; status: string };
                 return <li key={d.blocked_by} className="flex items-center justify-between gap-2"><Link href={`/c/${cid}/tasks/${b.id}`} className="truncate hover:underline">{b.title}</Link>
-                  <span className="flex items-center gap-2"><Badge value={b.status} />{canManage && <form action={removeDependency.bind(null, cid, tid, d.blocked_by)}><button className="text-xs text-slate-400 hover:text-rose-600">✕</button></form>}</span></li>;
+                  <span className="flex items-center gap-2"><Badge value={b.status} />{canManage && <form action={removeDependency.bind(null, cid, tid, d.blocked_by)}><button className="text-xs text-slate-500 hover:text-rose-600">✕</button></form>}</span></li>;
               })}
               {!deps?.length && <li className="text-slate-500">Nothing.</li>}
             </ul>

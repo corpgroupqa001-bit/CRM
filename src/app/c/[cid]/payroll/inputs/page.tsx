@@ -31,7 +31,7 @@ export default async function Inputs({ params, searchParams }: { params: Promise
     <>
       <PageHeader title="Variable pay & loans" actions={<form className="flex gap-2"><input type="month" name="month" defaultValue={month} className="input w-44" /><button className="btn-secondary">Show</button></form>} />
       <PayrollTabs cid={cid} active="inputs" />
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
         <div className="space-y-6 lg:col-span-2">
           <Card title={`Inputs for ${fmtMonth(`${month}-01`)}`} pad={false}>
             <Table head={["Employee", "Type", "Amount", "Note", ""]} empty="No bonus, incentive, reimbursement or deduction this month.">

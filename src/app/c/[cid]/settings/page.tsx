@@ -240,7 +240,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
               <h4 className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {g.title}{g.dep && status(g.dep)}
                 {!g.dep && <span className="font-normal normal-case text-amber-700">Not offered at sign-up until a department is chosen</span>}
-                {g.dep && !g.dep.active && <span className="font-normal normal-case text-slate-400">Not offered while the department is inactive</span>}
+                {g.dep && !g.dep.active && <span className="font-normal normal-case text-slate-500">Not offered while the department is inactive</span>}
               </h4>
               <ul className="divide-y divide-slate-100">
                 {g.rows.map((r) => (

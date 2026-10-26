@@ -25,9 +25,9 @@ export default async function ChatLayout({ children, params }: { children: React
   const people = (dir ?? []).filter((d) => d.user_id !== user.id).map((d) => ({ userId: d.user_id!, name: d.full_name, photo: d.photo_url }));
 
   return (
-    <div className="-mx-4 -my-6 flex h-[calc(100vh-3.5rem)] sm:-mx-6">
+    <div className="-mx-4 -mb-28 -mt-5 flex h-[calc(100dvh-60px-4rem-env(safe-area-inset-bottom))] sm:-mx-6 lg:-my-8 lg:h-[calc(100dvh-60px)]">
       <ChatSidebar cid={cid} convs={convs} people={people} meId={user.id} />
-      <section className="flex min-w-0 flex-1 flex-col bg-white">{children}</section>
+      <section className="flex min-w-0 flex-1 flex-col bg-surface">{children}</section>
       <Link href={`/c/${cid}/announcements`} className="sr-only">Announcements</Link>
     </div>
   );

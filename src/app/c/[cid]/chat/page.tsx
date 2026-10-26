@@ -31,7 +31,7 @@ export default async function ChatHome({ params, searchParams }: { params: Promi
     .eq("company_id", cid).eq("deleted", false).textSearch("search", sp.q.split(/\s+/).filter(Boolean).map((w) => `${w}:*`).join(" & ")).order("created_at", { ascending: false }).limit(50)).data : null;
 
   return (
-    <div className="flex flex-1 flex-col p-6">
+    <div className="hidden min-w-0 flex-1 flex-col p-4 sm:p-6 md:flex">
       <form className="mx-auto mb-6 flex w-full max-w-lg gap-2"><input name="q" defaultValue={sp.q} placeholder="Search messages and files" className="input" /><button className="btn-secondary">Search</button></form>
       {results ? (
         <ul className="mx-auto w-full max-w-lg divide-y divide-slate-100">

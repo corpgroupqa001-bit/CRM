@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
-/* corpgroup.com design tokens: neutral slate surfaces, one indigo accent, Inter. */
+/* corpgroup.com design tokens: neutral slate surfaces, one indigo accent, Inter, light + dark themes.
+   Pages use the Tailwind palette (slate-*, emerald-*, …). The dark theme remaps that palette under
+   html.dark: neutrals invert, tints (50–200) become dark washes and deep shades (600–900) become light,
+   so text stays readable on every surface. Solid fills that must not flip (buttons, the sign-in panel)
+   use the fixed tokens accent / danger / hero / scrim below. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-brand-50: #eef2ff;
   --color-brand-100: #e0e7ff;
@@ -12,49 +18,112 @@
   --color-brand-700: #4338ca;
   --color-brand-800: #3730a3;
   --color-brand-900: #1e1b4b;
-  --color-canvas: #f6f7f9;
+  /* slate-500 one step darker than Tailwind's so small grey text passes AA (4.5:1) on the canvas */
+  --color-slate-500: #5b6678;
+  --color-canvas: #f4f5f8;
+  --color-surface: #ffffff;
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-danger: #e11d48;
+  --color-danger-hover: #be123c;
+  --color-hero: #1e1b4b;
+  --color-scrim: rgb(15 23 42 / 0.4);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.03);
-  --shadow-pop: 0 10px 30px -10px rgb(15 23 42 / 0.25), 0 4px 10px -4px rgb(15 23 42 / 0.08);
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.05), 0 1px 3px 0 rgb(15 23 42 / 0.04);
+  --shadow-pop: 0 12px 32px -12px rgb(15 23 42 / 0.28), 0 4px 10px -4px rgb(15 23 42 / 0.08);
 }
 
 :root { color-scheme: light; }
+/* screen only: printouts and "Save as PDF" always use the light theme */
+@media screen {
+html.dark {
+  color-scheme: dark;
+  --color-canvas: #0b0f17;
+  --color-surface: #141a26;
+  --color-accent-hover: #6366f1;
+  --color-scrim: rgb(0 0 0 / 0.6);
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --color-slate-50: #1a2130;
+  --color-slate-100: #1f2737;
+  --color-slate-200: #2a3344;
+  --color-slate-300: #3b4558;
+  --color-slate-400: #6b7487;
+  --color-slate-500: #8a93a6;
+  --color-slate-600: #a7b0c0;
+  --color-slate-700: #c3cad6;
+  --color-slate-800: #d7dce5;
+  --color-slate-900: #e7eaf0;
+  --color-slate-950: #f3f5f8;
+  --color-brand-50: color-mix(in oklab, #6366f1 16%, #141a26);
+  --color-brand-100: color-mix(in oklab, #6366f1 24%, #141a26);
+  --color-brand-200: color-mix(in oklab, #6366f1 36%, #141a26);
+  --color-brand-600: #818cf8;
+  --color-brand-700: #a5b4fc;
+  --color-brand-800: #a5b4fc;
+  --color-brand-900: #c7d2fe;
+  --color-red-50: color-mix(in oklab, oklch(63.7% 0.237 25.331) 14%, #141a26); --color-red-100: color-mix(in oklab, oklch(63.7% 0.237 25.331) 20%, #141a26); --color-red-200: color-mix(in oklab, oklch(63.7% 0.237 25.331) 32%, #141a26);
+  --color-red-600: oklch(70.4% 0.191 22.216); --color-red-700: oklch(80.8% 0.114 19.571); --color-red-800: oklch(80.8% 0.114 19.571); --color-red-900: oklch(88.5% 0.062 18.334);
+  --color-orange-50: color-mix(in oklab, oklch(70.5% 0.213 47.604) 14%, #141a26); --color-orange-100: color-mix(in oklab, oklch(70.5% 0.213 47.604) 20%, #141a26); --color-orange-200: color-mix(in oklab, oklch(70.5% 0.213 47.604) 32%, #141a26);
+  --color-orange-600: oklch(75% 0.183 55.934); --color-orange-700: oklch(83.7% 0.128 66.29); --color-orange-800: oklch(83.7% 0.128 66.29); --color-orange-900: oklch(90.1% 0.076 70.697);
+  --color-amber-50: color-mix(in oklab, oklch(76.9% 0.188 70.08) 14%, #141a26); --color-amber-100: color-mix(in oklab, oklch(76.9% 0.188 70.08) 20%, #141a26); --color-amber-200: color-mix(in oklab, oklch(76.9% 0.188 70.08) 32%, #141a26);
+  --color-amber-600: oklch(82.8% 0.189 84.429); --color-amber-700: oklch(87.9% 0.169 91.605); --color-amber-800: oklch(87.9% 0.169 91.605); --color-amber-900: oklch(92.4% 0.12 95.746);
+  --color-emerald-50: color-mix(in oklab, oklch(69.6% 0.17 162.48) 14%, #141a26); --color-emerald-100: color-mix(in oklab, oklch(69.6% 0.17 162.48) 20%, #141a26); --color-emerald-200: color-mix(in oklab, oklch(69.6% 0.17 162.48) 32%, #141a26);
+  --color-emerald-600: oklch(76.5% 0.177 163.223); --color-emerald-700: oklch(84.5% 0.143 164.978); --color-emerald-800: oklch(84.5% 0.143 164.978); --color-emerald-900: oklch(90.5% 0.093 164.15);
+  --color-teal-50: color-mix(in oklab, oklch(70.4% 0.14 182.503) 14%, #141a26); --color-teal-100: color-mix(in oklab, oklch(70.4% 0.14 182.503) 20%, #141a26); --color-teal-200: color-mix(in oklab, oklch(70.4% 0.14 182.503) 32%, #141a26);
+  --color-teal-600: oklch(77.7% 0.152 181.912); --color-teal-700: oklch(85.5% 0.138 181.071); --color-teal-800: oklch(85.5% 0.138 181.071); --color-teal-900: oklch(91% 0.096 180.426);
+  --color-sky-50: color-mix(in oklab, oklch(68.5% 0.169 237.323) 14%, #141a26); --color-sky-100: color-mix(in oklab, oklch(68.5% 0.169 237.323) 20%, #141a26); --color-sky-200: color-mix(in oklab, oklch(68.5% 0.169 237.323) 32%, #141a26);
+  --color-sky-600: oklch(74.6% 0.16 232.661); --color-sky-700: oklch(82.8% 0.111 230.318); --color-sky-800: oklch(82.8% 0.111 230.318); --color-sky-900: oklch(90.1% 0.058 230.902);
+  --color-indigo-50: color-mix(in oklab, oklch(58.5% 0.233 277.117) 14%, #141a26); --color-indigo-100: color-mix(in oklab, oklch(58.5% 0.233 277.117) 20%, #141a26); --color-indigo-200: color-mix(in oklab, oklch(58.5% 0.233 277.117) 32%, #141a26);
+  --color-indigo-600: oklch(67.3% 0.182 276.935); --color-indigo-700: oklch(78.5% 0.115 274.713); --color-indigo-800: oklch(78.5% 0.115 274.713); --color-indigo-900: oklch(87% 0.065 274.039);
+  --color-violet-50: color-mix(in oklab, oklch(60.6% 0.25 292.717) 14%, #141a26); --color-violet-100: color-mix(in oklab, oklch(60.6% 0.25 292.717) 20%, #141a26); --color-violet-200: color-mix(in oklab, oklch(60.6% 0.25 292.717) 32%, #141a26);
+  --color-violet-600: oklch(70.2% 0.183 293.541); --color-violet-700: oklch(81.1% 0.111 293.571); --color-violet-800: oklch(81.1% 0.111 293.571); --color-violet-900: oklch(89.4% 0.057 293.283);
+  --color-rose-50: color-mix(in oklab, oklch(64.5% 0.246 16.439) 14%, #141a26); --color-rose-100: color-mix(in oklab, oklch(64.5% 0.246 16.439) 20%, #141a26); --color-rose-200: color-mix(in oklab, oklch(64.5% 0.246 16.439) 32%, #141a26);
+  --color-rose-600: oklch(71.2% 0.194 13.428); --color-rose-700: oklch(81% 0.117 11.638); --color-rose-800: oklch(81% 0.117 11.638); --color-rose-900: oklch(89.2% 0.058 10.001);
+}
+}
+
 html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-body { background: var(--color-canvas); color: #0f172a; font-feature-settings: "cv11", "ss01"; }
+body { background: var(--color-canvas); color: var(--color-slate-900); font-feature-settings: "cv11", "ss01"; }
 ::selection { background: var(--color-brand-100); }
 :focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
 
 /* form controls */
 @utility input {
-  @apply h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-[0_1px_1px_rgb(15_23_42/0.03)]
-    outline-none transition placeholder:text-slate-400 hover:border-slate-300
-    focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500;
+  @apply h-[38px] w-full rounded-[10px] border border-slate-200 bg-surface px-3 text-sm font-normal text-slate-900 shadow-[0_1px_1px_rgb(15_23_42/0.03)]
+    outline-none transition placeholder:text-slate-500 hover:border-slate-300
+    focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500;
 }
 textarea.input, select[multiple].input { @apply h-auto py-2; }
+select.input:not([multiple]) {
+  appearance: none; padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a93a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.65rem center;
+}
 input[type="file"].input { @apply h-auto py-1.5 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-slate-700; }
-input[type="checkbox"], input[type="radio"] { accent-color: var(--color-brand-600); width: 1rem; height: 1rem; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--color-accent); width: 1rem; height: 1rem; }
 @utility label { @apply mb-1.5 block text-[13px] font-medium text-slate-700; }
 
 /* buttons */
 @utility btn {
-  @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-sm font-medium transition
+  @apply inline-flex h-[38px] items-center justify-center gap-2 whitespace-nowrap rounded-[10px] px-3.5 text-sm font-medium transition
     active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
 }
-@utility btn-primary { @apply btn bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700; }
-@utility btn-secondary { @apply btn border border-slate-200 bg-white text-slate-700 shadow-[0_1px_1px_rgb(15_23_42/0.04)] hover:border-slate-300 hover:bg-slate-50; }
-@utility btn-danger { @apply btn bg-rose-600 text-white shadow-sm hover:bg-rose-700; }
+@utility btn-primary { @apply btn bg-accent text-white shadow-sm shadow-brand-600/20 hover:bg-accent-hover; }
+@utility btn-secondary { @apply btn border border-slate-200 bg-surface text-slate-700 shadow-[0_1px_1px_rgb(15_23_42/0.04)] hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900; }
+@utility btn-danger { @apply btn bg-danger text-white shadow-sm hover:bg-danger-hover; }
 @utility btn-ghost { @apply btn text-slate-600 hover:bg-slate-100 hover:text-slate-900; }
-@utility btn-sm { @apply h-8 px-2.5 text-[13px]; }
+@utility btn-sm { @apply h-8 rounded-lg px-2.5 text-[13px]; }
 
 /* surfaces */
-@utility card { @apply rounded-xl border border-slate-200/80 bg-white shadow-(--shadow-card); }
+@utility card { @apply rounded-[14px] border border-slate-200/80 bg-surface shadow-(--shadow-card); }
 
 /* tables */
-@utility th { @apply whitespace-nowrap px-4 py-2.5 text-left text-xs font-medium text-slate-500; }
+@utility th { @apply whitespace-nowrap px-4 py-2.5 text-left text-xs font-semibold text-slate-500; }
 @utility td { @apply px-4 py-3 text-sm text-slate-700; }
 
 /* tiny scrollbars inside panels */
-.thin-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.thin-scroll { scrollbar-width: thin; scrollbar-color: var(--color-slate-300) transparent; }
 
 /* print / "Save as PDF" for reports: only the page content, no navigation */
 @media print {

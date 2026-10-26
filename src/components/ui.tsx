@@ -7,10 +7,10 @@ export function PageHeader({ title, subtitle, actions, eyebrow }: {
   title: string; subtitle?: React.ReactNode; actions?: React.ReactNode; eyebrow?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
       <div className="min-w-0">
-        {eyebrow && <div className="mb-1 text-xs font-medium text-slate-500">{eyebrow}</div>}
-        <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">{title}</h1>
+        {eyebrow && <div className="mb-1 text-[13px] font-medium text-slate-500">{eyebrow}</div>}
+        <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-slate-900 sm:text-[26px]">{title}</h1>
         {subtitle && <div className="mt-1 text-sm text-slate-500">{subtitle}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -24,15 +24,15 @@ export function Card({ title, description, actions, children, className = "", pa
   return (
     <section className={`card overflow-hidden ${className}`}>
       {(title || actions) && (
-        <header className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+        <header className="flex min-h-[52px] flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-            {description && <p className="text-xs text-slate-500">{description}</p>}
+            {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
           </div>
           {actions}
         </header>
       )}
-      <div className={pad ? "p-4" : ""}>{children}</div>
+      <div className={pad ? "p-4 sm:p-5" : ""}>{children}</div>
     </section>
   );
 }
@@ -51,12 +51,12 @@ export function Stat({ label: l, value, hint, tone = "slate", icon: Icon }: {
   const t = TONE[tone] ?? TONE.slate;
   return (
     <div className="card p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-[13px] font-medium text-slate-500">{l}</div>
-        {Icon && <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${t.icon}`}><Icon className="h-3.5 w-3.5" /></span>}
+      <div className="flex items-center gap-2">
+        {Icon && <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${t.icon}`}><Icon className="h-3.5 w-3.5" /></span>}
+        <div className="truncate text-[13px] font-medium text-slate-600">{l}</div>
       </div>
-      <div className={`mt-1.5 text-2xl font-semibold tracking-tight tabular-nums ${t.text}`}>{value}</div>
-      {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
+      <div className={`mt-2.5 text-[28px] font-semibold leading-none tracking-tight tabular-nums ${t.text}`}>{value}</div>
+      {hint && <div className="mt-2 text-xs text-slate-500">{hint}</div>}
     </div>
   );
 }
@@ -81,7 +81,7 @@ const BADGE: Record<string, readonly [string, string]> = {
 export function Badge({ value, text }: { value: string | null | undefined; text?: string }) {
   const [cls, dot] = BADGE[value ?? ""] ?? N;
   return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium ${cls}`}>
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
       {text ?? label(value)}
     </span>
@@ -93,10 +93,10 @@ export function Table({ head, children, empty }: { head: React.ReactNode[]; chil
   return (
     <div className="thin-scroll overflow-x-auto">
       <table className="min-w-full">
-        <thead className="border-b border-slate-100 bg-slate-50/70">
+        <thead className="border-b border-slate-100 bg-slate-50">
           <tr>{head.map((h, i) => <th key={i} className="th">{h}</th>)}</tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 [&>tr]:transition-colors [&>tr:hover]:bg-slate-50/60">
+        <tbody className="divide-y divide-slate-100 [&>tr]:transition-colors [&>tr:hover]:bg-slate-50">
           {rows.length ? children : (
             <tr><td colSpan={head.length} className="px-4 py-12 text-center">
               <Inbox className="mx-auto mb-2 h-6 w-6 text-slate-300" />
@@ -122,7 +122,7 @@ export function Field({ label: l, children, hint, className = "" }: { label: str
 export function Empty({ title, children, action, icon: Icon = Inbox }: { title: string; children?: React.ReactNode; action?: React.ReactNode; icon?: LucideIcon }) {
   return (
     <div className="card flex flex-col items-center px-6 py-14 text-center">
-      <span className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500"><Icon className="h-5 w-5" /></span>
+      <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600"><Icon className="h-5 w-5" /></span>
       <div className="text-base font-semibold text-slate-900">{title}</div>
       {children && <div className="mt-1 max-w-md text-sm text-slate-500">{children}</div>}
       {action && <div className="mt-5">{action}</div>}
@@ -132,14 +132,16 @@ export function Empty({ title, children, action, icon: Icon = Inbox }: { title: 
 
 export function Tabs({ tabs, active }: { tabs: { href: string; label: string; key: string }[]; active: string }) {
   return (
-    <nav className="thin-scroll mb-6 flex gap-6 overflow-x-auto border-b border-slate-200">
-      {tabs.map((t) => (
-        <Link key={t.key} href={t.href} scroll={false}
-          className={`-mb-px whitespace-nowrap border-b-2 pb-2.5 pt-1 text-sm font-medium transition-colors ${t.key === active ? "border-brand-600 text-slate-900" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"}`}>
-          {t.label}
-        </Link>
-      ))}
-    </nav>
+    <div className="relative mb-6 max-w-full">
+      <nav className={`thin-scroll flex w-max max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-surface p-1 shadow-(--shadow-card) ${tabs.length > 3 ? "max-sm:[mask-image:linear-gradient(90deg,#000_82%,transparent)]" : ""}`}>
+        {tabs.map((t) => (
+          <Link key={t.key} href={t.href} scroll={false} aria-current={t.key === active ? "page" : undefined}
+            className={`whitespace-nowrap rounded-[9px] px-3.5 py-1.5 text-sm font-medium transition-colors ${t.key === active ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+    </div>
   );
 }
 

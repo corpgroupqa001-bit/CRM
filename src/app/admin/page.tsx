@@ -11,6 +11,7 @@ import { SessionGuard } from "@/components/session-guard";
 import { AdminSignIn } from "./sign-in";
 import { adminSignOut } from "./actions";
 import { AdminIdle } from "./idle";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ADMIN_IDLE_SECONDS } from "@/lib/auth/admin-idle";
 
 export const metadata = { title: "Platform admin" };
@@ -173,10 +174,10 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <SessionGuard userId={me.id} scope="admin" signInPath="/admin" />
       <AdminIdle idleSeconds={ADMIN_IDLE_SECONDS} />
-      <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between gap-3 border-b border-slate-200 bg-surface/90 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6">
         <span className="text-sm text-slate-500">Admin portal · signed in as <b className="font-medium text-slate-700">{me.email}</b>
-          <span className="ml-2 hidden text-xs text-slate-400 sm:inline">Signs out after 15 minutes idle or when the browser closes</span></span>
-        <form action={adminSignOut}><button className="btn-secondary btn-sm">Sign out of admin</button></form>
+          <span className="ml-2 hidden text-xs text-slate-500 sm:inline">Signs out after 15 minutes idle or when the browser closes</span></span>
+        <span className="flex items-center gap-1"><ThemeToggle /><form action={adminSignOut}><button className="btn-secondary btn-sm">Sign out of admin</button></form></span>
       </div>
       <div className="mt-4"><PageHeader title="Platform admin" subtitle="All tenants on corpgroup.com: plans, seats and company administrators" /></div>
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -212,7 +213,7 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
                     {c.admins.filter((a) => a.active).map((a) => (
                       <li key={a.user_id} className="flex items-center gap-2">
                         <span className="truncate">{a.email}</span><Badge value={a.role} text={a.role === "owner" ? "Owner" : "Admin"} />
-                        {a.role !== "owner" && <form action={removeAdmin.bind(null, c.id, a.user_id)}><button className="text-slate-400 hover:text-rose-600" aria-label={`Remove ${a.email}`}>✕</button></form>}
+                        {a.role !== "owner" && <form action={removeAdmin.bind(null, c.id, a.user_id)}><button className="text-slate-500 hover:text-rose-600" aria-label={`Remove ${a.email}`}>✕</button></form>}
                       </li>
                     ))}
                   </ul>

@@ -30,7 +30,7 @@ export default async function OrgChart({ params }: { params: Promise<{ cid: stri
         {list.map((p) => (
           <li key={p.id} className="relative py-1.5">
             {depth > 0 && <span className="absolute -left-5 top-6 h-px w-5 bg-slate-200" />}
-            <Link href={`/c/${cid}/employees/${p.id}`} className="inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-(--shadow-card) transition hover:border-brand-300">
+            <Link href={`/c/${cid}/employees/${p.id}`} className="inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-surface px-3 py-2 shadow-(--shadow-card) transition hover:border-brand-300">
               <Avatar name={p.full_name} url={p.photo_url} size={34} />
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-slate-900">{p.full_name}</span>

@@ -27,13 +27,13 @@ export function Board({ cid, tasks, columns }: { cid: string; tasks: Task[]; col
               start(async () => { move({ id, status: col }); await setTaskStatus(cid, id, col); });
             }}>
             <div className="mb-2 flex items-center justify-between px-2 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {label(col)}<span className="rounded-full bg-white px-2 py-0.5">{items.length}</span>
+              {label(col)}<span className="rounded-full bg-surface px-2 py-0.5">{items.length}</span>
             </div>
             <div className="min-h-24 space-y-2">
               {items.map((t) => (
                 <Link key={t.id} href={`/c/${cid}/tasks/${t.id}`} draggable
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
-                  className="block cursor-grab rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm hover:border-brand-300 active:cursor-grabbing">
+                  className="block cursor-grab rounded-lg border border-slate-200 bg-surface p-3 text-sm shadow-sm hover:border-brand-300 active:cursor-grabbing">
                   <div className="font-medium text-slate-800">{t.title}</div>
                   {t.project && <div className="mt-0.5 text-xs text-slate-500">{t.project}</div>}
                   <div className="mt-2 flex items-center justify-between gap-2">
