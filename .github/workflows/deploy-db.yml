@@ -44,8 +44,20 @@ jobs:
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
+      # 0001–0025 were applied by hand in the SQL Editor before this workflow existed, so the project's
+      # migration history didn't list them and db push tried to run 0001 again ("relation already exists").
+      # Marking them applied only writes to the history table; it's a no-op once they're recorded.
+      - name: Record migrations applied by hand
+        run: >
+          supabase migration repair --linked --status applied
+          20261022000001 20261022000002 20261022000003 20261022000004 20261022000005
+          20261022000006 20261022000007 20261022000008 20261022000009 20261023000010
+          20261023000011 20261023000012 20261023000013 20261023000014 20261023000015
+          20261023000016 20261023000017 20261023000018 20261023000019 20261023000020
+          20261023000021 20261024000022 20261024000023 20261024000024 20261024000025
+
       - name: Apply database migrations
-        run: supabase db push
+        run: supabase db push --linked --yes
 
       - name: Deploy attendance device webhook
         run: supabase functions deploy punch-webhook --no-verify-jwt
