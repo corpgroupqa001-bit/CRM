@@ -1,19 +1,51 @@
-# On merge to main: apply migrations to production and deploy the device webhook.
-# Vercel deploys the web app itself from the GitHub integration.
+
+# On changes to Supabase files on main, apply migrations and deploy the webhook.
 name: Deploy database
+
 on:
   push:
     branches: [main]
-    paths: ["supabase/**"]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/**"
+
 jobs:
   migrate:
     runs-on: ubuntu-latest
+
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: supabase/setup-cli@v1
-      - run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-      - run: supabase db push
-      - run: supabase functions deploy punch-webhook --no-verify-jwt
+        with:
+          version: latest
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || {
+            echo "::error::SUPABASE_ACCESS_TOKEN is missing"
+            exit 1
+          }
+          test -n "$SUPABASE_DB_PASSWORD" || {
+            echo "::error::SUPABASE_DB_PASSWORD is missing"
+            exit 1
+          }
+          test -n "$SUPABASE_PROJECT_REF" || {
+            echo "::error::SUPABASE_PROJECT_REF is missing"
+            exit 1
+          }
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Apply database migrations
+        run: supabase db push
+
+      - name: Deploy attendance device webhook
+        run: supabase functions deploy punch-webhook --no-verify-jwt
