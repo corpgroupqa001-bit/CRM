@@ -8,6 +8,7 @@ export function PayrollTabs({ cid, active }: { cid: string; active: string }) {
     { key: "inputs", label: "Variable pay & loans", href: `${b}/inputs` },
     { key: "setup", label: "Structures & statutory", href: `${b}/setup` },
     { key: "tax", label: "Tax declarations", href: `${b}/tax` },
+    { key: "reports", label: "Reports", href: `${b}/reports` },
   ]} />;
 }
 

@@ -90,6 +90,7 @@ export const EXPORT_PERMISSION: Record<string, Perm> = {
   tds: "salaries.read",
   "ctc-vs-actual": "salaries.read",
   "department-cost": "salaries.read",
+  "payroll-report": "salaries.read",   // X-03 filtered payroll reports over a month range
   journal: "salaries.manage",
   "bank-file": "salaries.manage",   // full account numbers: HR / Payroll, who prepares and pays
 };

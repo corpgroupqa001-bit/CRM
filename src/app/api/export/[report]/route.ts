@@ -1,36 +1,20 @@
 import { NextResponse } from "next/server";
-import * as XLSX from "xlsx";
 import { requireApiUser } from "@/lib/auth/guard";
 import { decrypt } from "@/lib/crypto";
 import { employeeExportRows, IMPORT_COLUMNS } from "@/lib/employees";
 import { EXPORT_PERMISSION } from "@/lib/rbac";
 import { fmtMonth } from "@/lib/format";
+import { attendanceReport, attendanceView } from "@/lib/attendance-report";
+import { payrollReport, payrollReportKind } from "@/lib/payroll-report";
+import { dayFilters, filterLabel, monthFilters } from "@/lib/report-filters";
+import { csv, format, tableDownload, text, xlsx, type Row } from "@/lib/report-output";
 
 export const runtime = "nodejs";
 
-type Row = Record<string, string | number | null>;
 type Emp = { first_name: string; last_name: string | null; emp_code: string; email?: string; uan?: string | null; esi_no?: string | null;
   pan_last4?: string | null; ifsc?: string | null; bank_account_enc?: string | null; bank_name?: string | null; departments?: { name: string } | null };
 
 const name = (e: Emp) => `${e.first_name} ${e.last_name ?? ""}`.trim();
-
-function xlsx(rows: Row[], file: string, sheet = "Sheet1") {
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{ info: "No data" }]), sheet);
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-  return new NextResponse(new Uint8Array(buf), { headers: {
-    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "Content-Disposition": `attachment; filename="${file}.xlsx"`, "Cache-Control": "private, no-store" } });
-}
-function text(body: string, file: string, type = "text/csv") {
-  return new NextResponse(body, { headers: { "Content-Type": `${type}; charset=utf-8`, "Content-Disposition": `attachment; filename="${file}"`, "Cache-Control": "private, no-store" } });
-}
-const csv = (rows: Row[]) => {
-  if (!rows.length) return "";
-  const keys = Object.keys(rows[0]);
-  const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  return [keys.join(","), ...rows.map((r) => keys.map((k) => esc(r[k])).join(","))].join("\n");
-};
 
 // X-03 report exports. Every query runs as the signed-in user, so RLS limits the data.
 export async function GET(req: Request, { params }: { params: Promise<{ report: string }> }) {
@@ -63,29 +47,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ report: 
     return xlsx((await employeeExportRows(supabase, cid)) as Row[], "employees");
   }
 
-  if (report === "attendance") {
-    const month = url.searchParams.get("month") ?? new Date().toISOString().slice(0, 7);
-    const days = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
-    const [{ data: people }, { data: att }] = await Promise.all([
-      supabase.from("employee_directory").select("id, emp_code, full_name, department").eq("company_id", cid).order("emp_code"),
-      supabase.from("daily_attendance").select("employee_id, date, status, late, worked_minutes, ot_approved_minutes").eq("company_id", cid).gte("date", `${month}-01`).lte("date", `${month}-${days}`),
+  if (report === "attendance" || report === "payroll-report") {
+    // X-03: the filtered report on screen (branch, department, date range) as Excel, CSV or PDF
+    const get = (k: string) => url.searchParams.get(k);
+    const f = report === "attendance" ? dayFilters(get) : monthFilters(get);
+    const [t, { data: company }, { data: branches }, { data: departments }] = await Promise.all([
+      report === "attendance" ? attendanceReport(supabase, cid, f, attendanceView(get("view"))) : payrollReport(supabase, cid, f, payrollReportKind(get("type"))),
+      supabase.from("companies").select("name").eq("id", cid).single(),
+      supabase.from("branches").select("id, name").eq("company_id", cid),
+      supabase.from("departments").select("id, name").eq("company_id", cid),
     ]);
-    const rows: Row[] = [];
-    for (const p of people ?? []) {
-      const a = (att ?? []).filter((x) => x.employee_id === p.id);
-      if (!a.length) continue;
-      const r: Row = { code: p.emp_code, name: p.full_name, department: p.department };
-      for (let d = 1; d <= days; d++) r[String(d)] = a.find((x) => Number(x.date.slice(8, 10)) === d)?.status ?? "";
-      r.present = a.filter((x) => ["present", "late", "early_out", "on_duty", "wfh"].includes(x.status)).length;
-      r.half_days = a.filter((x) => x.status === "half_day").length;
-      r.absent = a.filter((x) => ["absent", "missed_punch"].includes(x.status)).length;
-      r.leave = a.filter((x) => x.status === "on_leave").length;
-      r.late_marks = a.filter((x) => x.late).length;
-      r.hours = +(a.reduce((s, x) => s + x.worked_minutes, 0) / 60).toFixed(2);
-      r.ot_hours_approved = +(a.reduce((s, x) => s + x.ot_approved_minutes, 0) / 60).toFixed(2);
-      rows.push(r);
-    }
-    return xlsx(rows, `attendance-${month}`, "Muster");
+    const file = `${report === "attendance" ? attendanceView(get("view")) : payrollReportKind(get("type"))}-${f.from}-to-${f.to}`;
+    return tableDownload(t, format(get("format")), file, company?.name ?? "", filterLabel(f, branches ?? [], departments ?? []));
   }
 
   if (report === "chat") {
