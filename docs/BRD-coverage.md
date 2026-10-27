@@ -64,7 +64,7 @@ EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles
 - **TSK-01 … TSK-11** ✅† (Employees create tasks for themselves; HR / Payroll has full Tasks rights).
 - **COMMS-01 … 08, 12** ✅† (COMMS-07 push needs the database webhook). **COMMS-09 … 11** ✗ Phase 2. **COMMS-13** ✗ Phase 3.
 - **CRM-01 … CRM-22** ✗ Phase 3, deferred under OI-09.
-- **X-01** ◐ (email needs SMTP) · **X-02, X-05, X-06** ✅ · **X-03** ✅ attendance reports (day range) and Payroll → Reports (month range, locked runs) filter by branch, department and dates; Excel, CSV and PDF downloads match the screen (PF ECR, ESI, PT and the bank file stay whole-company, by decision of 27 Oct) · **X-04** ◐ needs SMTP · **X-07** ◐ no undo · **X-08, X-09** ✗ Phase 2.
+- **X-01** ◐ (email needs SMTP) · **X-02, X-05, X-06** ✅ · **X-03** ✅ attendance reports (day range) and Payroll → Reports (month range, locked runs; the salary register shows the SAL-20 / §7.5.2 calculation in BRD order, statutory columns following the company switches) filter by branch, department and dates; Excel, CSV and PDF downloads match the screen (PF ECR, ESI, PT and the bank file stay whole-company, by decision of 27 Oct) · **X-04** ◐ needs SMTP · **X-07** ◐ no undo · **X-08, X-09** ✗ Phase 2.
 
 ## NFR
 | ID | Status | Note |
