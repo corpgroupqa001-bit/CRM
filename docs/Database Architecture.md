@@ -1,7 +1,7 @@
 # Database architecture: corpgroup.com
 
 The database is the core of this application. Besides storing data, it **enforces permissions (RLS), integrity rules (triggers) and the attendance and payroll calculations (PL/pgSQL)**.
-This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0035). For the application side, see [`system.md`](./system.md).
+This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0036). For the application side, see [`system.md`](./system.md).
 
 > **The migrations are the source of truth.** If this document and a migration disagree, the migration wins. Please update this file in the same PR.
 
@@ -94,6 +94,7 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0033 | `wfh_regularisation_eligibility` | A correction of kind `wfh` is refused unless the employee is WFH-eligible (ATT-21); on-site and field staff record attendance by punches |
 | 0034 | `selfies_hr_manager_only` | Selfie files readable only by HR / Payroll and the employee's reporting manager (ATT-25); shown on the employee's attendance page |
 | 0035 | `selfie_flags` | Decision of 27 Oct 2026 (beyond BRD v2.0): `selfie_flags`; `flag_selfie` (HR / Payroll or the reporting manager, reason + note), `explain_selfie_flag` (the employee), `close_selfie_flag` (accept or uphold). Notifications and audit at each step; no effect on attendance or pay by itself |
+| 0036 | `add_existing_person` | Decision of 27 Oct 2026 (builds on EMP-10, AUTH-11): `people_from_my_companies` (people of my other companies where I'm Owner / Company Admin) and `add_existing_person` (add and keep, or move out of chosen / all companies the day before); copies name, email and phone only (BRD §7.2); a former record here is reactivated |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

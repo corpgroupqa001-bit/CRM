@@ -111,7 +111,7 @@ Every change is tried on a separate Supabase project first; `main` is live.
 ## Tests
 
 ```bash
-pnpm test        # 229 tests, no Docker or hosted database needed
+pnpm test        # 233 tests, no Docker or hosted database needed
 pnpm lint && pnpm typecheck && pnpm build
 ```
 The tests load the **real migrations** into PGlite (Postgres compiled to WASM). They cover:

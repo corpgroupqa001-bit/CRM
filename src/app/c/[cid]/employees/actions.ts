@@ -511,3 +511,25 @@ export async function unlockLogin(cid: string, eid: string, _: ActionState, __: 
     return "Login unlocked. They can sign in again.";
   });
 }
+
+// An existing employee of one of my other companies joins this one: added (they stay where they are) or
+// moved (they leave the companies chosen). Owner / Company Admin of every company involved (0036).
+export async function addExistingPerson(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  let id = "";
+  const r = await attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "employees.assign_role");
+    const mode = str(fd, "mode") === "move" ? "move" : "add";
+    const leave = fd.getAll("leave").map(String).filter(Boolean);
+    if (mode === "move" && !fd.get("leave_all") && !leave.length) throw new Error("Choose the companies they leave, or All companies.");
+    id = must(await ctx.supabase.rpc("add_existing_person", {
+      p_company: cid, p_source_employee: str(fd, "person"), p_mode: mode,
+      p_leave: mode === "move" && !fd.get("leave_all") ? leave : null,
+      p_role: str(fd, "role") ?? "employee", p_department: str(fd, "department"), p_designation: str(fd, "designation"),
+      p_manager: str(fd, "reporting_manager_id"), p_joining: str(fd, "date_of_joining"),
+    })) as string;
+  });
+  if (r?.error) return r;
+  revalidatePath(`/c/${cid}/employees`, "layout");
+  redirect(`/c/${cid}/employees/${id}`);
+}

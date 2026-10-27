@@ -3,6 +3,7 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { createEmployee } from "../actions";
 import { JobFields, PersonalFields, StatutoryFields, jobOptions } from "../form-fields";
+import { ExistingPersonForm, type ExistingPerson } from "./existing-person";
 
 export const metadata = { title: "Add employee" };
 
@@ -14,9 +15,22 @@ export default async function NewEmployee({ params }: { params: Promise<{ cid: s
   const canAccount = ctx.perms.has("employees.account");   // invitation (HR / Payroll, administrators)
   const canSetRole = ctx.perms.has("employees.assign_role");   // system role (Owner, Company Admin)
   const canSalary = ctx.perms.has("salaries.manage");
+  // Owner / Company Admin: people from their other companies, to add or move here (0036)
+  const fromOthers = canSetRole ? await Promise.all([
+    ctx.supabase.rpc("people_from_my_companies", { p_company: cid }),
+    ctx.supabase.from("designations").select("id, name, department_id").eq("company_id", cid).eq("active", true).order("name"),
+    ctx.supabase.from("departments").select("id, name").eq("company_id", cid).eq("active", true).order("name"),
+  ]) : null;
+  const others = (fromOthers?.[0].data ?? []) as ExistingPerson[];
   return (
     <>
       <PageHeader title="Add employee" subtitle="The employee record feeds attendance, payroll, tasks and chat — complete it before the first payroll." />
+      {!!others.length && (
+        <Card title="Someone from your other companies?" description="Pick a person who already works in a company you manage, then add them here or move them." className="mb-6">
+          <ExistingPersonForm cid={cid} people={others} departments={fromOthers![2].data ?? []} designations={fromOthers![1].data ?? []}
+            managers={o.managers.map((m) => ({ id: m.id, full_name: m.full_name }))} />
+        </Card>
+      )}
       <ActionForm action={createEmployee.bind(null, cid)} className="space-y-6">
         <Card title="Personal details"><div className="grid gap-4 md:grid-cols-2"><PersonalFields /></div></Card>
         <Card title="Job details"><div className="grid gap-4 md:grid-cols-3"><JobFields o={o} canSetRole={canSetRole} /></div></Card>

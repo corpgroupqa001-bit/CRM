@@ -3,7 +3,7 @@
 Checked against *BRD – CRM & Workforce Management Platform* **v2.0** (26 Oct 2026), 27 Oct 2026, after migrations 0027–0030.
 ✅ built · ◐ built with a stated limit · ✗ not built (with reason)
 
-Database rules marked † are covered by automated tests (`pnpm test`, 229 tests on the real migrations).
+Database rules marked † are covered by automated tests (`pnpm test`, 233 tests on the real migrations).
 
 ## AUTH — sign-up / login
 | ID | Status | Where / note |
@@ -34,7 +34,7 @@ Database rules marked † are covered by automated tests (`pnpm test`, 229 tests
 | COM-09 archive with retention | ✅† | statutory records kept 8 years, other data purged after 90 days (0027) |
 
 ## EMP — employees
-EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles stay with Owner / Company Admin). Rejected submits keep everything typed.
+EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles stay with Owner / Company Admin). Rejected submits keep everything typed. **Addition by decision (27 Oct):** on Add employee an Owner / Company Admin picks someone from their other companies and adds them (kept in both) or moves them (out of chosen / all companies), copying only basic details (0036).
 
 ## ATT — attendance, leave, work from home
 | ID | Status | Where / note |
