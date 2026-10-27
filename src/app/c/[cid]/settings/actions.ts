@@ -49,6 +49,8 @@ export async function savePolicies(cid: string, _: ActionState, fd: FormData): P
       late_marks_to_half_day: numOrNull(fd, "late_marks_to_half_day") ?? 0,
       payable_map: map,
       payslip_password: bool(fd, "payslip_password"),
+      missed_out_grace_hours: numOrNull(fd, "missed_out_grace_hours") ?? 2,
+      selfie_retention_days: numOrNull(fd, "selfie_retention_days") ?? 90,
     }).eq("id", cid));
     return done(cid, "Policies saved.");
   });

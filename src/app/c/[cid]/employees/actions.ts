@@ -496,3 +496,18 @@ export async function transferCompany(cid: string, eid: string, _: ActionState, 
     return "Transferred. The exit month's payroll here settles the final salary; the new company starts from the effective date.";
   });
 }
+
+// AUTH-02: an administrator (or HR, who manages logins) lifts a lockout before the 15 minutes are up.
+// The lockout counts failures since the last success, so a recorded unlock resets it; the audit log says who.
+export async function unlockLogin(cid: string, eid: string, _: ActionState, __: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "employees.account");
+    const e = must(await ctx.supabase.from("employees").select("email, user_id").eq("id", eid).eq("company_id", cid).single());
+    const admin = createAdminClient();
+    await admin.from("login_attempts").insert({ email: String(e.email).toLowerCase(), success: true, ip: "unlocked by administrator" });
+    await admin.from("audit_log").insert({ company_id: cid, user_id: ctx.user.id, table_name: "login_attempts", record_id: eid, action: "unlock_login" });
+    revalidatePath(`/c/${cid}/employees/${eid}`);
+    return "Login unlocked. They can sign in again.";
+  });
+}

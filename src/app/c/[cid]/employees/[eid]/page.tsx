@@ -7,9 +7,9 @@ import { fmtDate, fmtDateTime, label, money } from "@/lib/format";
 import { fullName } from "@/lib/employees";
 import {
   documentUrl, inviteEmployee, issueAsset, lifecycle, mapDevice, removeEmployee, returnAsset, saveStatutory, setEmployeePassword, toggleChecklist,
-  transferCompany, unmapDevice, updateEmployee,
+  transferCompany, unlockLogin, unmapDevice, updateEmployee,
 } from "../actions";
-import { PASSWORD_RULE } from "@/lib/auth/session";
+import { isLockedOut, PASSWORD_RULE } from "@/lib/auth/session";
 import { JobFields, PersonalFields, StatutoryFields, jobOptions } from "../form-fields";
 import { CompaniesTab } from "./companies-tab";
 
@@ -192,6 +192,11 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     const otherCompanies = (myCompanies ?? []).map((m) => m.companies as unknown as { id: string; name: string }).filter((c) => c.id !== cid);
     const { data: events } = await supabase.from("employee_events").select("*").eq("employee_id", eid).order("effective_date", { ascending: false });
     const act = lifecycle.bind(null, cid, eid);
+    // AUTH-02 / AUTH-15: lockout state and recent sign-ins (login history is readable by the Owner and Company Admin)
+    const [locked, { data: logins }] = e.user_id && acct
+      ? await Promise.all([isLockedOut(String(e.email).toLowerCase()),
+          supabase.from("login_history").select("at, ip, user_agent, method").eq("user_id", e.user_id).order("at", { ascending: false }).limit(10)])
+      : [false, { data: null }];
     const sel = (name: string, rows: { id: string; name?: string; full_name?: string }[], cur: string | null) => (
       <select className="input" name={name} defaultValue={cur ?? ""}><option value="">—</option>{rows.map((r) => <option key={r.id} value={r.id}>{r.full_name ?? r.name}</option>)}</select>);
     body = (
@@ -245,6 +250,23 @@ export default async function EmployeePage({ params, searchParams }: { params: P
             <Field label="New password" hint={PASSWORD_RULE}><input className="input" name="password" type="text" autoComplete="off" minLength={8} required /></Field>
             <SubmitButton className="btn-secondary">{e.user_id ? "Set password" : "Create login"}</SubmitButton>
           </ActionForm>
+        </Card>}
+        {acct && e.user_id && <Card title="Sign-in" description="Five wrong passwords in 15 minutes lock the login for 15 minutes.">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge value={locked ? "blocked" : "active"} text={locked ? "Locked out" : "Not locked"} />
+            {locked && <ActionForm action={unlockLogin.bind(null, cid, eid)} className="flex items-center gap-2"><SubmitButton className="btn-secondary btn-sm">Unlock now</SubmitButton></ActionForm>}
+          </div>
+          {logins && (
+            <div className="mt-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Recent sign-ins</div>
+              {logins.length ? (
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {logins.map((l, i) => <li key={i} className="flex flex-wrap justify-between gap-2 py-2"><span className="text-slate-700">{fmtDateTime(l.at)} · {label(l.method ?? "password")}</span>
+                    <span className="max-w-full truncate text-xs text-slate-500" title={l.user_agent ?? ""}>{l.ip ?? "—"}</span></li>)}
+                </ul>
+              ) : <p className="text-sm text-slate-500">No sign-ins yet.</p>}
+            </div>
+          )}
         </Card>}
         {acct && otherCompanies.length > 0 && (
           <Card title="Transfer to another company">

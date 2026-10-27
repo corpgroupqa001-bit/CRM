@@ -346,6 +346,8 @@ export default async function Settings({ params, searchParams }: { params: Promi
                   <option value="calendar">Calendar days in the month</option><option value="30">Fixed 30</option><option value="26">Fixed 26</option></select></Field>
               <Field label="Overtime multiplier"><input className="input" name="ot_multiplier" type="number" step="0.25" min={1} defaultValue={company.ot_multiplier} /></Field>
               <Field label="Late marks that make a half-day" hint="0 turns the rule off"><input className="input" name="late_marks_to_half_day" type="number" min={0} defaultValue={company.late_marks_to_half_day} /></Field>
+              <Field label="Missed check-out after (hours past shift end)" hint="A day with an in-punch and no out-punch is flagged then and the employee is asked to request a correction (ATT-36)"><input className="input" name="missed_out_grace_hours" type="number" min={0} max={12} defaultValue={company.missed_out_grace_hours ?? 2} /></Field>
+              <Field label="Keep attendance selfies for (days)" hint="Older selfies are deleted automatically (ATT-25)"><input className="input" name="selfie_retention_days" type="number" min={1} max={3650} defaultValue={company.selfie_retention_days ?? 90} /></Field>
               <label className="flex items-center gap-2 pt-6 text-sm md:col-span-2"><input type="checkbox" name="sandwich_paid" defaultChecked={company.sandwich_paid} />
                 Pay a weekly off / holiday that falls between two LOP days (sandwich rule)</label>
               <label className="flex items-start gap-2 text-sm md:col-span-3"><input type="checkbox" name="payslip_password" defaultChecked={company.payslip_password} className="mt-0.5" />
