@@ -3,7 +3,7 @@
 Checked against *BRD – CRM & Workforce Management Platform* **v2.0** (26 Oct 2026), 27 Oct 2026, after migrations 0027–0030.
 ✅ built · ◐ built with a stated limit · ✗ not built (with reason)
 
-Database rules marked † are covered by automated tests (`pnpm test`, 226 tests on the real migrations).
+Database rules marked † are covered by automated tests (`pnpm test`, 227 tests on the real migrations).
 
 ## AUTH — sign-up / login
 | ID | Status | Where / note |
