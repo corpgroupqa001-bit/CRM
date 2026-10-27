@@ -82,7 +82,7 @@ export default async function MyAttendance({ params, searchParams }: { params: P
               <ActionForm action={requestRegularisation.bind(null, cid)} className="space-y-3" resetOnSuccess>
                 <Field label="Date"><input className="input" type="date" name="date" max={todayIST()} required /></Field>
                 <Field label="Type"><select className="input" name="kind">
-                  <option value="missed_punch">Missed punch</option><option value="on_duty">On duty (outside office)</option><option value="wfh">Work from home</option></select></Field>
+                  <option value="missed_punch">Missed punch</option><option value="on_duty">On duty (outside office)</option>{who?.wfh_eligible && <option value="wfh">Work from home</option>}</select></Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="In time"><input className="input" type="time" name="in_time" /></Field>
                   <Field label="Out time"><input className="input" type="time" name="out_time" /></Field>

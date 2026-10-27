@@ -1,7 +1,7 @@
 # Database architecture: corpgroup.com
 
 The database is the core of this application. Besides storing data, it **enforces permissions (RLS), integrity rules (triggers) and the attendance and payroll calculations (PL/pgSQL)**.
-This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0032). For the application side, see [`system.md`](./system.md).
+This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0033). For the application side, see [`system.md`](./system.md).
 
 > **The migrations are the source of truth.** If this document and a migration disagree, the migration wins. Please update this file in the same PR.
 
@@ -91,6 +91,7 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0030 | `work_from_home` | `employees.wfh_eligible`, `companies.wfh_capture_gps`; tables `wfh_days`, `work_sessions`, `work_breaks` (read via RLS, written only by functions); `request_wfh`, `decide_wfh`, `cancel_wfh`, `assign_wfh`, `wfh_check_in`, `wfh_break`, `wfh_check_out`, `wfh_status`, `wfh_live`, `wfh_auto_close` (from `attendance_tick`); `compute_attendance_day` derives WFH day status from worked hours |
 | 0031 | `sync_system_role` | Keeps `employees.invite_role` (Job tab) and `company_members.role` (Users & roles) in step in both directions (never the owner); repairs a role set on the Job tab that never reached the person's access |
 | 0032 | `run_payroll_safeupdate` | `run_payroll` empties its temporary table with `delete ... where true`: hosted Supabase (safeupdate) refuses a DELETE without WHERE on API requests, so payroll couldn't run from the app. `tests/safeupdate.test.ts` checks every function for this |
+| 0033 | `wfh_regularisation_eligibility` | A correction of kind `wfh` is refused unless the employee is WFH-eligible (ATT-21); on-site and field staff record attendance by punches |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

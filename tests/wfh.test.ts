@@ -113,6 +113,15 @@ describe("ATT-31: forgotten check-out", () => {
   });
 });
 
+describe("ATT-21: on-site and field staff can't be marked as working from home", () => {
+  it("a correction to 'work from home' is refused for an employee who isn't eligible", async () => {
+    await expect(as("field", `insert into regularisations (company_id, employee_id, date, kind, reason) values ($1, $2, '2026-10-22', 'wfh', 'x')`, [cid, E.field]))
+      .rejects.toThrow(/isn't enabled/);
+    await as("field", `insert into regularisations (company_id, employee_id, date, kind, reason, in_time, out_time) values ($1, $2, '2026-10-22', 'missed_punch', 'Card not read', '09:00', '18:00')`, [cid, E.field]);
+    await as("sita", `insert into regularisations (company_id, employee_id, date, kind, reason) values ($1, $2, '2026-10-22', 'wfh', 'Forgot to check in')`, [cid, E.sita]);
+  });
+});
+
 describe("ATT-25/30: who sees work-from-home figures", () => {
   it("the manager and HR see the live board; employees see only their own", async () => {
     const mine = await as<{ full_name: string }>("manager", `select * from wfh_live($1)`, [cid]);

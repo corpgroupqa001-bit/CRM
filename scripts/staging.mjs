@@ -104,7 +104,7 @@ async function seed() {
     E[k] = must(await db.from("employees").insert({
       company_id: cid, user_id: U[k], first_name: first, last_name: last, email: mail(k), date_of_joining: "2026-01-01", invite_role: role,
       department_id: k === "hr" ? dept["Human Resources"] : dept.Engineering, designation_id: ["ravi", "sita"].includes(k) ? desig : null,
-      wfh_eligible: k === "ravi", mobile_attendance: k === "sita",
+      wfh_eligible: k === "ravi", mobile_attendance: false,   // Sita and the others are on-site: device punches only
     }).select("id").single()).id;
   }
   await db.from("employees").update({ reporting_manager_id: E.manager }).in("id", [E.ravi, E.sita]);
@@ -139,6 +139,16 @@ async function seed() {
   const owner = await as("owner");
   must(await owner.rpc("approve_payroll", { p_run: run }));
 
+  // a biometric device at the gate; Sita (on-site) punched in and out this morning (ATT-02/04)
+  const admin = await as("admin");
+  const dev = must(await admin.rpc("register_device", { p_company: cid, p_branch: null, p_name: "Main gate (demo)", p_serial: "DEMO-GATE-1", p_vendor: "ZKTeco", p_model: "K40", p_ip: null, p_mode: "push" })).device_id;
+  must(await admin.rpc("map_device_user", { p_device: dev, p_device_user_id: "102", p_emp: E.sita }));
+  const day = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+  for (const t of ["08:58", "13:05"]) {
+    must(await db.from("punches_raw").insert({ company_id: cid, device_id: dev, device_user_id: "102", employee_id: E.sita, punched_at: `${day}T${t}:00+05:30`, source: "device", verify_type: "fingerprint" }));
+  }
+  must(await admin.rpc("recalculate_attendance", { p_company: cid, p_from: day, p_to: day }));
+
   // today is a work-from-home day for Ravi (ATT-20)
   const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
   must(await db.from("wfh_days").insert({ company_id: cid, employee_id: E.ravi, date: today, status: "approved", source: "hr" }));
@@ -155,7 +165,7 @@ Sign in at http://localhost:3001 (company: Demo Industries), password Demo@12345
   HR / Payroll   hr@demo.test
   Manager        manager@demo.test   (manages Ravi and Sita)
   Employee       ravi@demo.test      (work from home today; September payslip)
-  Employee       sita@demo.test      (mobile punch; September payslip)
+  Employee       sita@demo.test      (on-site: device punches today; September payslip)
 Admin portal: http://localhost:3001/admin needs a Super Admin, granted only in the staging SQL editor.
 `);
 }
