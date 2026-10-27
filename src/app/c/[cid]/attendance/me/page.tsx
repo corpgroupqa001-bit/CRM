@@ -6,6 +6,7 @@ import { fullName } from "@/lib/employees";
 import { cancelRegularisation, cancelWfh, requestRegularisation, requestWfh } from "../actions";
 import { WfhPanel, type WfhStatus } from "@/components/wfh-panel";
 import { MobilePunch } from "./punch";
+import { SelfieLog } from "./selfies";
 
 export const metadata = { title: "My attendance" };
 
@@ -51,6 +52,7 @@ export default async function MyAttendance({ params, searchParams }: { params: P
               ))}
             </Table>
           </Card>
+          {viewingOther && <SelfieLog supabase={supabase} empId={empId} from={from} to={to} />}
         </div>
         {!viewingOther && (
           <div className="space-y-6">

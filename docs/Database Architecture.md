@@ -1,7 +1,7 @@
 # Database architecture: corpgroup.com
 
 The database is the core of this application. Besides storing data, it **enforces permissions (RLS), integrity rules (triggers) and the attendance and payroll calculations (PL/pgSQL)**.
-This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0033). For the application side, see [`system.md`](./system.md).
+This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0034). For the application side, see [`system.md`](./system.md).
 
 > **The migrations are the source of truth.** If this document and a migration disagree, the migration wins. Please update this file in the same PR.
 
@@ -92,6 +92,7 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0031 | `sync_system_role` | Keeps `employees.invite_role` (Job tab) and `company_members.role` (Users & roles) in step in both directions (never the owner); repairs a role set on the Job tab that never reached the person's access |
 | 0032 | `run_payroll_safeupdate` | `run_payroll` empties its temporary table with `delete ... where true`: hosted Supabase (safeupdate) refuses a DELETE without WHERE on API requests, so payroll couldn't run from the app. `tests/safeupdate.test.ts` checks every function for this |
 | 0033 | `wfh_regularisation_eligibility` | A correction of kind `wfh` is refused unless the employee is WFH-eligible (ATT-21); on-site and field staff record attendance by punches |
+| 0034 | `selfies_hr_manager_only` | Selfie files readable only by HR / Payroll and the employee's reporting manager (ATT-25); shown on the employee's attendance page |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

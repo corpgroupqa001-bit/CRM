@@ -41,7 +41,7 @@ export function WfhLive({ companyId, initial }: { companyId: string; initial: Wf
           const [text, cls] = STATE[r.state];
           return (
             <tr key={r.employee_id}>
-              <td className="td font-medium text-slate-900">{r.full_name}{r.photo_missing && <span className="ml-2 text-xs font-medium text-amber-700">photo missing</span>}</td>
+              <td className="td font-medium text-slate-900"><a href={`/c/${companyId}/attendance/me?employee=${r.employee_id}`} className="hover:underline">{r.full_name}</a>{r.photo_missing && <span className="ml-2 text-xs font-medium text-amber-700">photo missing</span>}</td>
               <td className="td">{r.department ?? "—"}</td>
               <td className="td"><span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>{text}</span></td>
               <td className="td tabular-nums">{hm(r.worked_seconds + (r.state === "in" ? elapsed : 0))}</td>
