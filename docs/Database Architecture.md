@@ -99,6 +99,7 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0038 | `edit_default_roles` | Decision of 27 Oct 2026: every role viewable; default roles (not the Owner) editable per company in `company_default_roles` (`save_default_role`, `reset_default_role`; `role_perms` used by `my_access` / `clone_role`); the Company Admin role keeps `roles.manage` + `employees.assign_role`; as per BRD §5.2/§5.3 only the Company Admin has `roles.manage` (taken from the Owner); Owner and HR view roles (Settings R) |
 | 0039 | `owner_manages_roles` | Decision of 27 Oct 2026 (option A): the Owner also gets `roles.manage` (beyond BRD §5.3 Settings R); role functions say "Only the Owner or a Company Admin" |
 | 0040 | `statutory_switch_notify` | Decision of 27 Oct 2026: when PF, ESI, PT, LWF or TDS is switched on or off in `statutory_settings`, every Owner and Company Admin is notified (link `/payroll/setup`); HR keeps the switches (BRD §5.3); the app confirms before a switch is turned off |
+| 0041 | `lockout_minutes` | BRD AUTH-02: `companies.lockout_minutes` (15 default, 30, 60 or 1440), set by the Company Admin in Settings → Policies; the longest among a login's companies applies (`src/lib/auth/lockout.ts`); Owner, Company Admin and HR unlock from the employee's Lifecycle tab |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

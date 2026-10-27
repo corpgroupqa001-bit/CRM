@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertPerm, getCtx } from "@/lib/context";
 import { ASSIGNABLE_ROLES, type Role } from "@/lib/rbac";
+import { LOCKOUT_CHOICES } from "@/lib/auth/lockout";
 import { attempt, bool, must, numOrNull, str, type ActionState } from "@/lib/actions";
 
 const done = (cid: string, msg = "Saved.") => { revalidatePath(`/c/${cid}/settings`); return msg; };
@@ -53,6 +54,7 @@ export async function savePolicies(cid: string, _: ActionState, fd: FormData): P
       missed_out_grace_hours: numOrNull(fd, "missed_out_grace_hours") ?? 2,
       selfie_retention_days: numOrNull(fd, "selfie_retention_days") ?? 90,
       wfh_capture_gps: bool(fd, "wfh_capture_gps"),
+      lockout_minutes: LOCKOUT_CHOICES.find((m) => m === numOrNull(fd, "lockout_minutes")) ?? 15,
     }).eq("id", cid));
     return done(cid, "Policies saved.");
   });

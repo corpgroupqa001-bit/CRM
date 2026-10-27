@@ -4,6 +4,7 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Badge, Card, Field, PageHeader, Table, Tabs } from "@/components/ui";
 import { fmtDate, fmtDateTime, label } from "@/lib/format";
 import { ASSIGNABLE_ROLES, PERMISSION_GROUPS, ROLE_LABEL, type Role } from "@/lib/rbac";
+import { LOCKOUT_CHOICES, lockoutLabel } from "@/lib/auth/lockout";
 import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, setMemberRole, cloneRole, saveRole, deleteRole, saveDefaultRole, resetDefaultRole } from "./actions";
 
 export const metadata = { title: "Settings" };
@@ -364,6 +365,14 @@ export default async function Settings({ params, searchParams }: { params: Promi
                 ))}
               </div>
               <p className="mt-2 text-xs text-slate-500">Paid leave counts as 1 and LOP leave as 0, from each leave type. Shifts are managed under Attendance → Shifts.</p>
+            </div>
+            <div>
+              <div className="label">Sign-in security (AUTH-02)</div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Field label="Lock the login after 5 wrong passwords for" hint="Owner, Company Admin and HR can unlock it sooner from the employee's page. Someone in several companies gets the longest lock time.">
+                  <select className="input" name="lockout_minutes" defaultValue={company.lockout_minutes}>
+                    {LOCKOUT_CHOICES.map((n) => <option key={n} value={n}>{lockoutLabel(n)}{n === 15 ? " (standard)" : ""}</option>)}</select></Field>
+              </div>
             </div>
             {admin && <SubmitButton>Save policies</SubmitButton>}
           </fieldset>

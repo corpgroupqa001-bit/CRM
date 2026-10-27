@@ -23,14 +23,14 @@ export type Company = {
   emp_code_prefix: string; weekly_offs: number[]; salary_days_basis: string; sandwich_paid: boolean; ot_multiplier: number;
   late_marks_to_half_day: number; payable_map: Record<string, number>; status: string; plan: string; timezone: string;
   owner_id: string; fy_start_month: number; renewal_date: string | null; employee_limit: number | null;
-  payslip_password: boolean; chat_cross_dept: boolean; chat_retention_days: number;
+  payslip_password: boolean; chat_cross_dept: boolean; chat_retention_days: number; lockout_minutes: number;
   missed_out_grace_hours?: number; selfie_retention_days?: number; wfh_capture_gps?: boolean;
 };
 
 // exactly the Company fields pages use (no select("*"): skips internals like next_emp_seq and timestamps)
 const COMPANY_COLUMNS = "id, name, legal_name, logo_url, address, state, gstin, pan, tan, pf_reg_no, esi_reg_no, emp_code_prefix, " +
   "weekly_offs, salary_days_basis, sandwich_paid, ot_multiplier, late_marks_to_half_day, payable_map, status, plan, timezone, owner_id, " +
-  "fy_start_month, renewal_date, employee_limit, payslip_password, chat_cross_dept, chat_retention_days";
+  "fy_start_month, renewal_date, employee_limit, payslip_password, chat_cross_dept, chat_retention_days, lockout_minutes";
 
 /** The current user's membership, company and employee record for a company route. */
 type Access = { allowed: boolean; reason?: string; role?: Role; custom_role?: string; permissions?: string[] };

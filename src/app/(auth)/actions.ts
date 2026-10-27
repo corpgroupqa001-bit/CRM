@@ -7,7 +7,7 @@ import { issueOtp, normaliseEmail, OtpError, verifyOtp, verifyOtpLink, type OtpP
 import { supabaseOtpStore } from "@/lib/auth/otp-store";
 import { otpEmail, sendMail } from "@/lib/email/mailer";
 import {
-  clientIp, ensureUser, findUserByEmail, isLockedOut, PASSWORD_RULE, recordAttempt, recordLogin,
+  clientIp, ensureUser, findUserByEmail, lockedMessage, lockStatus, PASSWORD_RULE, recordAttempt, recordLogin,
   signInVerifiedEmail, validPassword,
 } from "@/lib/auth/session";
 import { errorMessage, str, type ActionState } from "@/lib/actions";
@@ -303,9 +303,8 @@ export async function loginPassword(_: ActionState, fd: FormData): Promise<Actio
   if (!email) return { error: "Enter your work email." };
   if (!password) return { error: "Enter your password." };
   try {
-    if (await isLockedOut(email)) {
-      return { error: "Too many failed attempts. Try again in 15 minutes, or sign in with an email code." };
-    }
+    const until = await lockStatus(email);
+    if (until) return { error: lockedMessage(until) };
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     await recordAttempt(email, !error);

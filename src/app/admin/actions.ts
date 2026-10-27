@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { normaliseEmail } from "@/lib/auth/otp";
-import { isLockedOut, recordAttempt, recordLogin } from "@/lib/auth/session";
+import { lockedMessage, lockStatus, recordAttempt, recordLogin } from "@/lib/auth/session";
 import { syncMfaFlag } from "@/lib/auth/guard";
 import { errorMessage, str, type ActionState } from "@/lib/actions";
 import { sessionIdOf } from "@/lib/auth/company-lock";
@@ -19,7 +19,8 @@ export async function adminSignIn(_: ActionState, fd: FormData): Promise<ActionS
   if (!email) return { error: "Enter your work email." };
   if (!password) return { error: "Enter your password." };
   try {
-    if (await isLockedOut(email)) return { error: "Too many failed attempts. Try again in 15 minutes." };
+    const until = await lockStatus(email);
+    if (until) return { error: lockedMessage(until) };
     const supabase = await createClient("admin");
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     await recordAttempt(email, !error);
