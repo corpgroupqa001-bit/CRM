@@ -83,7 +83,13 @@ export function WfhPanel({ cid, employeeId, initial, compact = false }: { cid: s
         <div className="flex flex-col-reverse rounded-xl bg-slate-50 px-2 py-2.5"><dt className="text-xs text-slate-500">Left to target</dt><dd className="text-base font-semibold tabular-nums text-slate-900">{hms(left)}</dd></div>
       </dl>
       <div className="flex flex-wrap gap-2">
-        {st.state === "out" && <button type="button" className="btn-primary h-11 flex-1" onClick={() => setCamera("in")}><LogIn className="h-4 w-4" /> Check in</button>}
+        {st.state === "out" && !st.sessions && <button type="button" className="btn-primary h-11 flex-1" onClick={() => setCamera("in")}><LogIn className="h-4 w-4" /> Check in</button>}
+        {st.state === "out" && st.sessions > 0 && (
+          // one session per work-from-home day (decision of 27 Oct 2026): the day is finished and saved
+          <p role="status" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+            ✅ <b>Checked out for today.</b> {hms(worked)} worked is saved. Checked out by mistake? Use <b>Request a correction</b>.
+          </p>
+        )}
         {st.state === "in" && !askBreak && <>
           <button type="button" className="btn-secondary h-11 flex-1" disabled={pending} onClick={() => { setMsg(null); setAskBreak(true); }}><Coffee className="h-4 w-4" /> Start break</button>
           <button type="button" className="btn-primary h-11 flex-1" onClick={() => setCamera("out")}><LogOut className="h-4 w-4" /> Check out</button>

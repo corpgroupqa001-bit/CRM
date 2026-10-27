@@ -61,14 +61,16 @@ describe("ATT-23/27/28/32/33: check-in, breaks, check-out on the server clock", 
     await expect(as("ravi", `select wfh_check_in($1, $2, 'x', null, null)`, [cid, `${cid}/${E.sita}/x.jpg`])).rejects.toThrow();
   });
 
-  it("breaks pause the timer; several sessions add up; nothing can be written directly", async () => {
+  it("breaks pause the timer; after check-out the day is finished (decision of 27 Oct, 0043); nothing can be written directly", async () => {
     await as("ravi", `select wfh_break($1, true)`, [cid]);
     expect((await status("ravi")).state).toBe("break");
     await expect(as("ravi", `select wfh_break($1, true)`, [cid])).rejects.toThrow(/already on a break/);
     await as("ravi", `select wfh_break($1, false)`, [cid]);
     await as("ravi", `select wfh_check_out($1, $2)`, [cid, `${cid}/${E.ravi}/out.jpg`]);
-    await as("ravi", `select wfh_check_in($1, $2, 'x', null, null)`, [cid, `${cid}/${E.ravi}/in2.jpg`]);
-    expect(Number((await status("ravi")).sessions)).toBe(2);
+    await expect(as("ravi", `select wfh_check_in($1, $2, 'x', null, null)`, [cid, `${cid}/${E.ravi}/in2.jpg`]))
+      .rejects.toThrow(/already checked out today/);
+    expect((await status("ravi")).state).toBe("out");
+    expect(Number((await status("ravi")).sessions)).toBe(1);
     await expect(as("ravi", `insert into work_sessions (company_id, employee_id, date, started_at) values ($1, $2, current_date, now() - interval '9 hours')`, [cid, E.ravi]))
       .rejects.toThrow(/row-level security/);
     await expect(as("ravi", `update work_sessions set started_at = now() - interval '9 hours' returning id`)).resolves.toHaveLength(0);
@@ -87,7 +89,7 @@ describe("ATT-23/27/28/32/33: check-in, breaks, check-out on the server clock", 
     expect(d).toEqual({ status: "half_day", late: true, worked_minutes: 255 });   // 4 h 15 m: half-day threshold met, late after 09:00 + 0 grace
   });
 
-  it("ATT-32: the status follows total worked hours across sessions", async () => {
+  it("ATT-32: the status follows total worked hours across sessions (sessions recorded before 0043, or by HR)", async () => {
     const [{ id }] = await sys<{ id: string }>(`insert into work_sessions (company_id, employee_id, date, started_at, ended_at, end_reason)
       values ($1, $2, '2026-10-20', '2026-10-20 15:00+05:30', '2026-10-20 19:00+05:30', 'checkout') returning id`, [cid, E.sita]);
     expect(id).toBeTruthy();
@@ -99,7 +101,6 @@ describe("ATT-23/27/28/32/33: check-in, breaks, check-out on the server clock", 
 
 describe("ATT-31: forgotten check-out", () => {
   it("closes at the last recorded activity, raises the day and tells employee and manager", async () => {
-    await as("ravi", `select wfh_check_out($1, null)`, [cid]);                               // today's session from the tests above
     await sys(`insert into wfh_days (company_id, employee_id, date, status, source) values ($1, $2, '2026-10-21', 'approved', 'hr')`, [cid, E.ravi]);
     const [{ id }] = await sys<{ id: string }>(`insert into work_sessions (company_id, employee_id, date, started_at)
       values ($1, $2, '2026-10-21', '2026-10-21 09:05+05:30') returning id`, [cid, E.ravi]);
@@ -124,7 +125,10 @@ describe("ATT-21: on-site and field staff can't be marked as working from home",
 
 describe("Selfie flags (0035, decision 27 Oct): HR or the manager flags, the employee explains", () => {
   it("only HR or the reporting manager flag; the employee is told and explains; then it is closed", async () => {
-    const [s] = await sys<{ id: string }>(`select id from work_sessions where employee_id = $1 and selfie_in is not null limit 1`, [E.ravi]);
+    // a past session with a check-in selfie (one session per day since 0043, so not today's)
+    await sys(`insert into wfh_days (company_id, employee_id, date, status, source) values ($1, $2, '2026-10-23', 'approved', 'hr')`, [cid, E.ravi]);
+    const [s] = await sys<{ id: string }>(`insert into work_sessions (company_id, employee_id, date, started_at, ended_at, end_reason, selfie_in)
+      values ($1, $2, '2026-10-23', '2026-10-23 09:00+05:30', '2026-10-23 18:00+05:30', 'checkout', $3) returning id`, [cid, E.ravi, `${cid}/${E.ravi}/in2.jpg`]);
     await expect(as("sita", `select flag_selfie('wfh_in', $1, 'wrong_place', 'x')`, [s.id])).rejects.toThrow(/Only HR or the reporting manager/);
     await expect(as("manager", `select flag_selfie('wfh_in', $1, 'wrong_place', '  ')`, [s.id])).rejects.toThrow(/Add a note/);
     await sys(`delete from notifications`);
