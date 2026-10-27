@@ -95,7 +95,7 @@ pnpm email:test you@example.com   # connects, logs in, sends a test email, expla
 ## Tests
 
 ```bash
-pnpm test        # 221 tests, no Docker or hosted database needed
+pnpm test        # 225 tests, no Docker or hosted database needed
 pnpm lint && pnpm typecheck && pnpm build
 ```
 The tests load the **real migrations** into PGlite (Postgres compiled to WASM). They cover:

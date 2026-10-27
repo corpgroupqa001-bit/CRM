@@ -1,7 +1,7 @@
 # Database architecture: corpgroup.com
 
 The database is the core of this application. Besides storing data, it **enforces permissions (RLS), integrity rules (triggers) and the attendance and payroll calculations (PL/pgSQL)**.
-This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0026). For the application side, see [`system.md`](./system.md).
+This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0030). For the application side, see [`system.md`](./system.md).
 
 > **The migrations are the source of truth.** If this document and a migration disagree, the migration wins. Please update this file in the same PR.
 
@@ -85,6 +85,10 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0024 | `hr_create_employees` | HR Managers get `employees.create` (decision 24 Oct 2026); `employees_insert_guard` makes a record created without `employees.account` start with no login, no invitation, role `employee` and an active status |
 | 0025 | `attendance_correction_reason` | `set_attendance_status` requires a reason (also for returning a day to automatic), checks `attendance.manage`, and writes an `attendance_correction` audit row for every correction (old → new status, reason), including days that had no record |
 | 0026 | `attendance_correction_notify` | Same `set_attendance_status` as 0025, plus an "Attendance corrected" notification to the employee (date, new and old status, reason; links to `/attendance/me`, kind `attendance`). Skipped when the employee has no login or corrects their own day |
+| 0027 | `brd_v2_alignment` | BRD v2.0 §5.3 matrix in `role_permissions` (six roles; `finance` retired → `hr`); role-name policies and functions switched to `has_perm` (`is_hr()` = `attendance.manage`); new permissions `company.update`, `settings.read`, `projects.read_all`, `projects.lead`, `tasks.create_own`; own approved payslips readable by the employee; `support_access` + `grant_support_access` / `revoke_support_access` and `sa_acting` requiring a live grant (OI-13); `purge_archived_companies` keeps statutory records 8 years (`companies.purged_at`); Leave switched on; employee guards split invitations (`employees.account`) from system roles (`employees.assign_role`) |
+| 0028 | `owner_signup` | `create_company_for(user, name)` (service role) and `create_company(name)`: owner sign-up and owners adding companies; `submit_join_request` now refuses (employees are invited) |
+| 0029 | `missed_out_and_retention` | `companies.missed_out_grace_hours` (default 2) used by `compute_attendance_day` for ATT-36 with a one-time "Missed check-out" notification; `companies.selfie_retention_days` (default 90); `retention_storage_due()` lists selfies and purged-company documents for the daily `/api/cron/retention` job |
+| 0030 | `work_from_home` | `employees.wfh_eligible`, `companies.wfh_capture_gps`; tables `wfh_days`, `work_sessions`, `work_breaks` (read via RLS, written only by functions); `request_wfh`, `decide_wfh`, `cancel_wfh`, `assign_wfh`, `wfh_check_in`, `wfh_break`, `wfh_check_out`, `wfh_status`, `wfh_live`, `wfh_auto_close` (from `attendance_tick`); `compute_attendance_day` derives WFH day status from worked hours |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

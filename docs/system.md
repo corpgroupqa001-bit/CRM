@@ -251,25 +251,28 @@ export async function approveRun(cid: string, runId: string, _: ActionState): Pr
 
 ## 7. Roles and permissions
 
-Every user has one role **per company** in `company_members.role`. Designation, department, manager, company and status are separate fields and grant nothing. Super Admin is platform-level (`platform_admins`, granted only in SQL) and is not a company role: in a company it isn't a member of, it acts as an Administrator without payroll approval or reopening, and everything it does there is audited (`audit_log.via_super_admin`).
+Every user has one role **per company** in `company_members.role`: `owner`, `company_admin`, `hr` (HR / Payroll), `manager` or `employee`, the default matrix of BRD v2.0 §5.3 (migration 0027). Designation, department, manager, company and status are separate fields and grant nothing. Super Admin is platform-level (`platform_admins`, granted only in SQL) and is not a company role: it manages tenants and subscriptions and sees a company's data only while that company's Company Admin has granted **support access** (Settings → Support access, 1–72 hours, with a reason; `support_access`, `sa_acting`). Everything it does there is audited (`audit_log.via_super_admin`) and it can't approve payroll.
 
-| Area | Owner / Administrator | HR Manager (`hr`) | Finance / Payroll (`finance`) | Manager | Employee |
+| Area | Owner | Company Admin | HR / Payroll (`hr`) | Manager | Employee |
 |---|---|---|---|---|---|
-| Employees | Full: create, invite, activate/deactivate, assign system role | Create (since 0024, decision 24 Oct), read and update records, incl. statutory & bank; no login, invitation, activation or role | Pay-related fields only (statutory, bank) | Own team | Own profile |
-| Attendance | Full | All, manage, approve | Read all | Team, approve | Own |
-| Salaries / Payroll | Full; approve (not own run); owner / admin reopen with typed confirmation | View only | Full; approve (not own run) | None | None (no payslips or tax declarations) |
-| Tasks | Full | View | None | Full for their team | Assigned tasks |
-| Projects (extra module) | Full | Projects they belong to (read) | None | Create and run projects they lead; read member projects | Projects they belong to (read) |
-| Chat | Yes | Yes | Yes | Yes | Yes |
-| Leave | Off in Phase 1: `platform_features.leave` (blocked by RLS, not only hidden) | | | | |
+| Companies | Create (sign-up, /owner), edit profile | Read, edit own company | Read | Read | Read |
+| Projects | Full | Full | Read all | Read; update the projects they manage | Member projects (read) |
+| Employees | Full, incl. system roles | Full, incl. system roles | Create, read, update, delete, invite, logins (no system roles) | Own team (read) | Own profile (read, update contact fields) |
+| Attendance | Read | Full; only role that unlocks a month | Full (no unlock) | Team: read, approve | Own; punch / WFH check-in |
+| Leave | Read | Full | Full | Team: read, approve | Apply, read own |
+| Salaries / Payroll | Read, approve, reopen | Read, approve, reopen | Prepare: structures, CTC, inputs, run, bank file | Own payslips | Own payslips |
+| Tasks | Full | Full | Full | Full for their team | Assigned tasks; create tasks for themselves |
+| Settings and audit log | Read | Full | Read | None | None |
+| Chat | Yes | Yes, plus chat controls | Yes | Yes | Yes |
 
-- **Candidates** sign up for a company by choosing a **department, then one of its designations** (the designation list is filtered by department and cleared when the department changes; the database re-checks the pair) (`join_requests`); an Owner / Administrator approves once in Employees → Sign-up approvals, confirming the access role suggested by `designations.access_role` (set by Administrators only). Pending or rejected candidates are signed straight back out.
-- **Switching company** needs the password again: a signed cookie (`lib/auth/company-lock.ts`, checked in `middleware.ts`) records the company this sign-in session unlocked; `/switch` re-checks the password.
-- **Removing** an employee: exited, access revoked, `removed_at` set and hidden from lists; history kept.
+- **Payroll:** HR / Payroll prepares and runs payroll; the Owner or a Company Admin approves (`salaries.approve`), never the person who ran that run (maker-checker). Employees and managers read their own approved payslips under **My payslips**.
+- **Sign-up:** owners sign up with name, email and company name and become that company's Owner (`create_company_for`, 0028); an owner adds further companies from `/owner` or the company switcher. Employees don't self-register: HR adds them and sends an invitation (`join_requests` only keeps requests made before 0028).
+- **Switching company** needs no new sign-in (AUTH-11): the signed `cg_company` cookie (`lib/auth/company-lock.ts`, `middleware.ts`) just records the company the session has open; membership is checked by `my_access` on every page.
+- **Removing** an employee: exited, access revoked, `removed_at` set and hidden from lists; history kept. Employees with attendance or payroll history can't be deleted.
 - The **staff directory** (`employee_directory`) shows every member only name, code, work email, photo, department, designation, branch, reporting line and status.
-- Employees with attendance or payroll history can't be deleted (mark them exited or deactivate them); nobody can change their own membership or role.
+- Nobody can change their own membership or role. Choosing a system role needs `employees.assign_role` (Owner, Company Admin); invitations and logins need `employees.account` (also HR).
 
-- The **database** is the source of truth: `role_permissions` maps roles to permissions, and RLS policies and functions call `has_perm(company, perm)`. `in_good_standing` denies users whose employee record is inactive or exited. Migrations `0018_rbac` and `0019_rbac_decisions`.
+- The **database** is the source of truth: `role_permissions` maps roles to permissions, and RLS policies and functions call `has_perm(company, perm)`. `in_good_standing` denies users whose employee record is inactive or exited. Migrations `0018_rbac`, `0019_rbac_decisions` and `0027_brd_v2_alignment` (BRD v2.0 matrix).
 - **At sign-in and on every request**, `getCtx()` (`lib/context.ts`) calls `my_access(company)` and gets `{allowed, reason, role, permissions}` from the server. Nothing the browser sends is trusted. A denied user goes to `/denied`.
 - **Pages** call `requirePerm()`, which shows `/c/[cid]/denied` on a direct URL. **Server actions** call `assertPerm()`. **Exports** check `EXPORT_PERMISSION` in `/api/export`. The `NAV` list in `lib/rbac.ts` only decides what is shown.
 - "Manager" rights over a person come from `employees.reporting_manager_id` plus the manager permissions.
@@ -353,7 +356,7 @@ flowchart LR
 
 - The calculation follows BRD §9 in order: payable days → proration ratio → earnings (prorated components, arrears, OT, bonus, incentive, encashment, gratuity, reimbursements) → PF / ESI / PT / LWF → TDS (regime-aware projection) → loans and recoveries → net pay never below zero (shortfall carried forward) → rounding per line.
 - Each run is **versioned**. Running again supersedes the previous draft, and `payroll_runs.changes` lists each employee whose net pay changed.
-- **Maker-checker:** Administrator or Finance / Payroll approve (`salaries.approve`), but never the person who ran that run. The Super Admin cannot approve.
+- **Maker-checker:** the Owner or a Company Admin approves (`salaries.approve`), never the person who ran that run; HR / Payroll prepares. The Super Admin cannot approve.
 - Only the owner or a company admin can **reopen** a finalized run, with a reason and the month typed as `YYYY-MM` to confirm.
 - Employees see their payslips only after the run is **locked**.
 - Payslip PDFs are generated on demand (`/api/payslip/[id]`), optionally password-protected (`companies.payslip_password`).
