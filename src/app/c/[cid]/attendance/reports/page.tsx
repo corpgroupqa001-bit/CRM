@@ -20,9 +20,11 @@ export default async function Reports({ params, searchParams }: { params: Promis
   const from = `${month}-01`;
   const days = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
   const to = `${month}-${String(days).padStart(2, "0")}`;
-  const [{ data: people }, { data: att }] = await Promise.all([
+  const [{ data: people }, { data: att }, { data: wfhDays }, { data: autoClosed }] = await Promise.all([
     ctx.supabase.from("employee_directory").select("id, full_name, emp_code, department").eq("company_id", cid).order("first_name"),
     ctx.supabase.from("daily_attendance").select("employee_id, date, status, late, late_minutes, first_in, worked_minutes, ot_minutes, ot_approved_minutes").eq("company_id", cid).gte("date", from).lte("date", to),
+    sp.view === "wfh" ? ctx.supabase.from("wfh_days").select("employee_id, date").eq("company_id", cid).eq("status", "approved").gte("date", from).lte("date", to) : Promise.resolve({ data: [] }),
+    sp.view === "wfh" ? ctx.supabase.from("work_sessions").select("employee_id, date").eq("company_id", cid).eq("end_reason", "auto").gte("date", from).lte("date", to) : Promise.resolve({ data: [] }),
   ]);
   const by = new Map<string, NonNullable<typeof att>>();
   for (const a of att ?? []) by.set(a.employee_id, [...(by.get(a.employee_id) ?? []), a]);
@@ -36,14 +38,33 @@ export default async function Reports({ params, searchParams }: { params: Promis
     <>
       <PageHeader title="Attendance reports" actions={<>
         <form className="flex flex-wrap gap-2"><input type="month" name="month" defaultValue={month} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Month" />
-          <select name="view" defaultValue={sp.view ?? "summary"} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Report"><option value="summary">Monthly summary</option><option value="muster">Muster roll</option><option value="late">Late-comers</option><option value="overtime">Overtime</option></select>
+          <select name="view" defaultValue={sp.view ?? "summary"} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Report"><option value="summary">Monthly summary</option><option value="muster">Muster roll</option><option value="late">Late-comers</option><option value="overtime">Overtime</option><option value="wfh">Work from home</option></select>
           <button className="btn-secondary">Show</button></form>
         <a className="btn-secondary" href={`/api/export/attendance?company=${cid}&month=${month}`}>Excel</a>
         <PrintButton />
       </>} />
       <AttendanceTabs cid={cid} active="reports" perms={ctx.perms} />
       <Card pad={false}>
-        {sp.view === "late" ? (
+        {sp.view === "wfh" ? (() => {
+          // ATT-34: days worked from home, average worked hours, late check-ins, days closed by auto-checkout
+          const attBy = new Map((att ?? []).map((a) => [`${a.employee_id}|${a.date}`, a]));
+          const per = new Map<string, { days: number; minutes: number; late: number; auto: number }>();
+          for (const d of wfhDays ?? []) {
+            const r = per.get(d.employee_id) ?? { days: 0, minutes: 0, late: 0, auto: 0 };
+            const a = attBy.get(`${d.employee_id}|${d.date}`);
+            r.days++; r.minutes += a?.worked_minutes ?? 0; if (a?.late) r.late++;
+            per.set(d.employee_id, r);
+          }
+          for (const s of autoClosed ?? []) { const r = per.get(s.employee_id); if (r) r.auto++; }
+          return (
+            <Table head={["Employee", "Department", "Days from home", "Average worked", "Late check-ins", "Closed automatically"]} empty="Nobody worked from home this month.">
+              {[...per.entries()].map(([id, r]) => { const p = names.get(id); return (
+                <tr key={id}><td className="td font-medium">{p?.full_name}</td><td className="td">{p?.department ?? "—"}</td>
+                  <td className="td tabular-nums">{r.days}</td><td className="td tabular-nums">{minutesToHm(Math.round(r.minutes / Math.max(1, r.days)))}</td>
+                  <td className="td tabular-nums">{r.late}</td><td className="td tabular-nums">{r.auto}</td></tr>); })}
+            </Table>
+          );
+        })() : sp.view === "late" ? (
           <Table head={["Date", "Employee", "Department", "First in", "Late by", "Status"]} empty="No late marks this month.">
             {lateRows.map((a) => { const p = names.get(a.employee_id); return (
               <tr key={`${a.employee_id}-${a.date}`}><td className="td">{fmtDate(a.date)}</td><td className="td font-medium">{p?.full_name}</td><td className="td">{p?.department ?? "—"}</td>

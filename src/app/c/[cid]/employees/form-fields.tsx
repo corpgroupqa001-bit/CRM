@@ -61,6 +61,7 @@ export function JobFields({ e = {}, o, canSetRole = false }: { e?: Emp; o: JobOp
         <Field label="System role" hint="Set by an administrator"><input className="input" value={ROLE_LABEL[(v("invite_role") || "employee") as Role]} disabled /></Field>
       )}
       <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" name="mobile_attendance" defaultChecked={!!e.mobile_attendance} /> Allow mobile attendance (selfie + GPS)</label>
+      <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" name="wfh_eligible" defaultChecked={!!e.wfh_eligible} /> Can work from home (selfie check-in, ATT-21)</label>
     </>
   );
 }

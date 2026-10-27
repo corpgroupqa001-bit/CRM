@@ -47,7 +47,7 @@ export async function createEmployee(cid: string, _: ActionState, fd: FormData):
     const { supabase } = ctx;
     const row: Record<string, unknown> = {
       company_id: cid, ...pick(fd, PERSONAL_FIELDS), ...pick(fd, JOB_FIELDS), ...sensitive(fd),
-      emp_code: str(fd, "emp_code"), mobile_attendance: bool(fd, "mobile_attendance"),
+      emp_code: str(fd, "emp_code"), mobile_attendance: bool(fd, "mobile_attendance"), wfh_eligible: bool(fd, "wfh_eligible"),
       invite_role: can(ctx, "employees.assign_role") ? str(fd, "invite_role") ?? "employee" : "employee",
     };
     if (!row.first_name || !row.email || !row.date_of_joining) throw new Error("First name, email and date of joining are required.");
@@ -72,7 +72,7 @@ export async function updateEmployee(cid: string, eid: string, section: "persona
     let patch: Record<string, unknown>;
     if (section === "job") {
       assertPerm(ctx, "employees.update");
-      patch = { ...pick(fd, JOB_FIELDS), emp_code: str(fd, "emp_code"), mobile_attendance: bool(fd, "mobile_attendance") };
+      patch = { ...pick(fd, JOB_FIELDS), emp_code: str(fd, "emp_code"), mobile_attendance: bool(fd, "mobile_attendance"), wfh_eligible: bool(fd, "wfh_eligible") };
       // the system role changes only when an administrator submits it
       if (can(ctx, "employees.assign_role") && fd.has("invite_role")) patch.invite_role = str(fd, "invite_role") ?? "employee";
     } else if (can(ctx, "employees.update")) {

@@ -51,6 +51,7 @@ export async function savePolicies(cid: string, _: ActionState, fd: FormData): P
       payslip_password: bool(fd, "payslip_password"),
       missed_out_grace_hours: numOrNull(fd, "missed_out_grace_hours") ?? 2,
       selfie_retention_days: numOrNull(fd, "selfie_retention_days") ?? 90,
+      wfh_capture_gps: bool(fd, "wfh_capture_gps"),
     }).eq("id", cid));
     return done(cid, "Policies saved.");
   });

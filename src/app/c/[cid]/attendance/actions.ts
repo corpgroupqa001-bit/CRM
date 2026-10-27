@@ -191,3 +191,82 @@ export async function bulkRegularisations(cid: string, _: ActionState, fd: FormD
     return failed.length ? { error: `${ok} ${status}; ${failed.length} failed: ${failed[0]}` } : `${ok} correction(s) ${status}.`;
   });
 }
+
+// ---------------------------------------------------------------------------
+// Work from home (ATT-20 to ATT-33). Times come from the database clock; the phone only sends the selfie
+// (live camera, uploaded to the employee's own folder) and, if the company enables it, its location.
+// ---------------------------------------------------------------------------
+async function uploadWorkSelfie(cid: string, fd: FormData, kind: "in" | "out") {
+  const { supabase, employee } = await getCtx(cid);
+  if (!employee) throw new Error("You don't have an employee record in this company.");
+  const selfie = fd.get("selfie");
+  if (!(selfie instanceof File) || !selfie.size) return { supabase, path: null };   // ATT-27: accepted and flagged "photo missing"
+  if (selfie.size > 2_000_000) throw new Error("The photo is too large.");
+  const path = `${cid}/${employee.id}/wfh-${new Date().toISOString().slice(0, 10)}-${kind}-${Date.now()}.jpg`;
+  must(await supabase.storage.from("selfies").upload(path, selfie, { contentType: "image/jpeg" }));
+  return { supabase, path };
+}
+
+export async function wfhCheckIn(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const { supabase, path } = await uploadWorkSelfie(cid, fd, "in");
+    must(await supabase.rpc("wfh_check_in", { p_company: cid, p_selfie_path: path, p_device: str(fd, "device"), p_lat: numOrNull(fd, "lat"), p_lng: numOrNull(fd, "lng") }));
+    rv(cid);
+    return path ? "Checked in." : "Checked in without a photo; your manager will see it flagged.";
+  });
+}
+
+export async function wfhCheckOut(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const { supabase, path } = await uploadWorkSelfie(cid, fd, "out");
+    must(await supabase.rpc("wfh_check_out", { p_company: cid, p_selfie_path: path }));
+    rv(cid);
+    return "Checked out.";
+  });
+}
+
+export async function wfhBreak(cid: string, start: boolean): Promise<ActionState> {
+  return attempt(async () => {
+    const { supabase } = await getCtx(cid);
+    must(await supabase.rpc("wfh_break", { p_company: cid, p_start: start }));
+    rv(cid);
+    return start ? "Break started." : "Back at work.";
+  });
+}
+
+export async function requestWfh(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const { supabase } = await getCtx(cid);
+    must(await supabase.rpc("request_wfh", { p_company: cid, p_date: str(fd, "date"), p_reason: str(fd, "reason") }));
+    rv(cid);
+    return "Request sent to your manager.";
+  });
+}
+
+export async function decideWfh(cid: string, id: string, approve: boolean) {
+  const { supabase } = await getCtx(cid);
+  must(await supabase.rpc("decide_wfh", { p_id: id, p_approve: approve, p_note: null }));
+  rv(cid);
+}
+
+export async function cancelWfh(cid: string, id: string) {
+  const { supabase } = await getCtx(cid);
+  must(await supabase.rpc("cancel_wfh", { p_id: id }));
+  rv(cid);
+}
+
+export async function assignWfh(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "attendance.manage");
+    const [scope, target] = (str(fd, "target") ?? "").split(":");   // "employee:<id>", "department:<id>" or "branch:<id>"
+    if (!target) throw new Error("Choose who works from home.");
+    const n = must(await ctx.supabase.rpc("assign_wfh", {
+      p_company: cid, p_from: str(fd, "from"), p_to: str(fd, "to"),
+      p_employee: scope === "employee" ? target : null, p_department: scope === "department" ? target : null, p_branch: scope === "branch" ? target : null,
+      p_weekdays: fd.getAll("weekdays").map(Number), p_alternate_weeks: fd.get("alternate") === "on",
+    })) as number;
+    rv(cid);
+    return n ? `${n} work-from-home day${n === 1 ? "" : "s"} set. Only employees allowed to work from home are included.` : "No new days: nobody in that group is allowed to work from home, or the days were already set.";
+  });
+}

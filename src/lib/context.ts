@@ -24,7 +24,7 @@ export type Company = {
   late_marks_to_half_day: number; payable_map: Record<string, number>; status: string; plan: string; timezone: string;
   owner_id: string; fy_start_month: number; renewal_date: string | null; employee_limit: number | null;
   payslip_password: boolean; chat_cross_dept: boolean; chat_retention_days: number;
-  missed_out_grace_hours?: number; selfie_retention_days?: number;
+  missed_out_grace_hours?: number; selfie_retention_days?: number; wfh_capture_gps?: boolean;
 };
 
 // exactly the Company fields pages use (no select("*"): skips internals like next_emp_seq and timestamps)

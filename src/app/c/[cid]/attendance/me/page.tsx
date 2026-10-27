@@ -3,7 +3,8 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Badge, Card, Field, PageHeader, Stat, Table } from "@/components/ui";
 import { fmtDate, fmtTime, label, minutesToHm, todayIST } from "@/lib/format";
 import { fullName } from "@/lib/employees";
-import { cancelRegularisation, requestRegularisation } from "../actions";
+import { cancelRegularisation, cancelWfh, requestRegularisation, requestWfh } from "../actions";
+import { WfhPanel, type WfhStatus } from "@/components/wfh-panel";
 import { MobilePunch } from "./punch";
 
 export const metadata = { title: "My attendance" };
@@ -19,10 +20,13 @@ export default async function MyAttendance({ params, searchParams }: { params: P
 
   const from = `${month}-01`;
   const to = new Date(new Date(from).getFullYear(), new Date(from).getMonth() + 1, 0).toISOString().slice(0, 10);
-  const [{ data: days }, { data: regs }, { data: who }] = await Promise.all([
+  const [{ data: days }, { data: regs }, { data: who }, { data: wfh }, { data: wfhDays }] = await Promise.all([
     supabase.from("daily_attendance").select("*").eq("employee_id", empId).gte("date", from).lte("date", to).order("date", { ascending: false }),
     supabase.from("regularisations").select("*").eq("employee_id", empId).order("created_at", { ascending: false }).limit(10),
-    supabase.from("employees").select("first_name, last_name, mobile_attendance").eq("id", empId).maybeSingle(),
+    supabase.from("employees").select("first_name, last_name, mobile_attendance, wfh_eligible").eq("id", empId).maybeSingle(),
+    viewingOther ? Promise.resolve({ data: null }) : supabase.rpc("wfh_status", { p_company: cid }),
+    supabase.from("wfh_days").select("id, date, status, source, reason").eq("employee_id", empId)
+      .gte("date", new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)).order("date").limit(20),
   ]);
   const c = (s: string[]) => (days ?? []).filter((d) => s.includes(d.status)).length;
 
@@ -51,6 +55,29 @@ export default async function MyAttendance({ params, searchParams }: { params: P
         {!viewingOther && (
           <div className="space-y-6">
             {who?.mobile_attendance && <Card title="Mobile punch"><MobilePunch cid={cid} /></Card>}
+            {who?.wfh_eligible && employee && (
+              <Card title="Work from home" description={(wfh as WfhStatus | null)?.day_status === "approved" ? "Today is an approved work-from-home day." : "Ask for a day in advance; your manager approves it."}>
+                <div className="space-y-5">
+                  {wfh && <WfhPanel cid={cid} employeeId={employee.id} initial={wfh as WfhStatus} />}
+                  <ActionForm action={requestWfh.bind(null, cid)} className="space-y-3" resetOnSuccess>
+                    <Field label="Day"><input className="input" type="date" name="date" min={todayIST()} required /></Field>
+                    <Field label="Reason (optional)"><input className="input" name="reason" placeholder="e.g. Plumber visiting" /></Field>
+                    <SubmitButton className="btn-secondary w-full">Ask to work from home</SubmitButton>
+                  </ActionForm>
+                  {!!wfhDays?.length && (
+                    <ul className="divide-y divide-slate-100 text-sm">
+                      {wfhDays.map((d) => (
+                        <li key={d.id} className="flex items-center justify-between gap-2 py-2">
+                          <span className="text-slate-700">{fmtDate(d.date)}{d.source === "hr" && <span className="ml-1 text-xs text-slate-500">· set by HR</span>}</span>
+                          <span className="flex items-center gap-2"><Badge value={d.status} />
+                            {["pending", "approved"].includes(d.status) && d.date > todayIST() && <form action={cancelWfh.bind(null, cid, d.id)}><button className="text-xs text-rose-600 hover:underline">Cancel</button></form>}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </Card>
+            )}
             <Card title="Request a correction">
               <ActionForm action={requestRegularisation.bind(null, cid)} className="space-y-3" resetOnSuccess>
                 <Field label="Date"><input className="input" type="date" name="date" max={todayIST()} required /></Field>

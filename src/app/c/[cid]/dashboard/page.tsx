@@ -8,6 +8,7 @@ import { leaveEnabled } from "@/lib/rbac";
 import { Badge, Card, Empty, PageHeader, Stat } from "@/components/ui";
 import { AttendanceTrend, HeadcountBars } from "@/components/charts";
 import { RunPayrollButton } from "@/components/run-payroll-button";
+import { WfhPanel, type WfhStatus } from "@/components/wfh-panel";
 import { dayCounts, fetchAll, presentShare, type SummaryEmployee, type SummaryRow } from "@/lib/attendance-summary";
 import { fmtDate, fmtMonth, fmtTime, money, todayIST } from "@/lib/format";
 
@@ -59,14 +60,16 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
           .eq("status", "missed_punch").gte("date", `${todayIST().slice(0, 7)}-01`),
   ]) : null;
 
-  const [{ data: myDay }, { data: balances }, { data: myTasks }, { data: announcements }] = await Promise.all([
+  const [{ data: myDay }, { data: balances }, { data: myTasks }, { data: announcements }, { data: wfh }] = await Promise.all([
     employee ? supabase.from("daily_attendance").select("status, first_in, last_out").eq("employee_id", employee.id).eq("date", today).maybeSingle() : Promise.resolve({ data: null }),
     employee && leaveOn ? supabase.from("leave_balance_view").select("code, name, opening, accrued, used, pending, paid")
       .eq("employee_id", employee.id).eq("year", Number(today.slice(0, 4))).eq("paid", true) : Promise.resolve({ data: [] }),
     employee && seesTasks ? supabase.from("task_assignees").select("tasks(id, title, status, due_at, priority)").eq("employee_id", employee.id).limit(50)
       : Promise.resolve({ data: [] }),
     supabase.from("announcements").select("id, title, created_at").eq("company_id", cid).order("created_at", { ascending: false }).limit(3),
+    employee ? supabase.rpc("wfh_status", { p_company: cid }) : Promise.resolve({ data: null }),
   ]);
+  const wfhToday = (wfh as WfhStatus | null)?.day_status === "approved" ? wfh as WfhStatus : null;
 
   type T = { id: string; title: string; status: string; due_at: string | null; priority: string };
   const openTasks = ((myTasks ?? []) as unknown as { tasks: T | null }[]).map((r) => r.tasks).filter((t): t is T => !!t && t.status !== "done")
@@ -182,6 +185,9 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
       <div className="space-y-8">
         {employee && (
           <section className="grid gap-4 lg:grid-cols-3">
+            {wfhToday && employee && <Card title="Work from home today" actions={<Link href={`${base}/attendance/me`} className="text-xs font-medium text-brand-600 hover:text-brand-700">Details →</Link>}>
+              <WfhPanel cid={cid} employeeId={employee.id} initial={wfhToday} compact />
+            </Card>}
             <Card title="Today" actions={<Link href={`${base}/attendance/me`} className="text-xs font-medium text-brand-600 hover:text-brand-700">My attendance →</Link>}>
               <div className="flex items-center gap-3">
                 <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Fingerprint className="h-5 w-5" /></span>
