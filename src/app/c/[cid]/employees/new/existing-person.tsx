@@ -20,20 +20,41 @@ export function ExistingPersonForm({ cid, people, departments, designations, man
   cid: string; people: ExistingPerson[]; departments: Option[]; designations: (Option & { department_id: string | null })[];
   managers: { id: string; full_name: string }[];
 }) {
-  const [pick, setPick] = useState("");
+  const [company, setCompany] = useState("");
+  const [pick, setPick] = useState("");   // the person's employee record in the chosen company
   const [mode, setMode] = useState<"add" | "move">("add");
   const [all, setAll] = useState(true);
-  const person = useMemo(() => people.find((p) => p.employee_id === pick), [people, pick]);
+  // step 1: my other companies (with how many people can be added from each)
+  const companies = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; count: number }>();
+    for (const p of people) for (const c of p.companies) {
+      const x = m.get(c.company_id) ?? { id: c.company_id, name: c.company, count: 0 };
+      x.count++; m.set(c.company_id, x);
+    }
+    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [people]);
+  // step 2: that company's employees
+  const inCompany = useMemo(() => people.flatMap((p) => p.companies.filter((c) => c.company_id === company)
+    .map((c) => ({ ...p, record: c.employee_id, code: c.code }))).sort((a, b) => a.full_name.localeCompare(b.full_name)), [people, company]);
+  const person = useMemo(() => inCompany.find((p) => p.record === pick), [inCompany, pick]);
   const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 
   return (
     <ActionForm action={addExistingPerson.bind(null, cid)} className="space-y-4">
-      <Field label="Person">
-        <select name="person" className="input" required value={pick} onChange={(e) => { setPick(e.target.value); setAll(true); }}>
-          <option value="" disabled>Choose someone from your other companies…</option>
-          {people.map((p) => <option key={p.employee_id} value={p.employee_id}>{p.full_name} · {p.email} · {p.companies.map((c) => c.company).join(", ")}</option>)}
-        </select>
-      </Field>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="1. Company">
+          <select className="input" required value={company} onChange={(e) => { setCompany(e.target.value); setPick(""); setAll(true); }}>
+            <option value="" disabled>Choose one of your other companies…</option>
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.count} {c.count === 1 ? "person" : "people"})</option>)}
+          </select>
+        </Field>
+        <Field label="2. Employee">
+          <select name="person" className="input" required value={pick} disabled={!company} onChange={(e) => { setPick(e.target.value); setAll(true); }}>
+            <option value="" disabled>{company ? "Choose an employee…" : "Choose a company first"}</option>
+            {inCompany.map((p) => <option key={p.record} value={p.record}>{p.full_name} · {p.code} · {p.email}</option>)}
+          </select>
+        </Field>
+      </div>
       {person && (
         <>
           <p className="text-sm text-slate-600">Works in {person.companies.map((c) => `${c.company} (${c.code})`).join(", ")}.{" "}
