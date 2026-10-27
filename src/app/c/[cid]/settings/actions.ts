@@ -184,7 +184,7 @@ export async function cloneRole(cid: string, _: ActionState, fd: FormData): Prom
     const data = must(await ctx.supabase.rpc("clone_role", {
       p_company: cid, p_name: str(fd, "name"), p_from_role: custom ? null : from, p_from_custom: custom }));
     revalidatePath(`/c/${cid}/settings`);
-    redirect(`/c/${cid}/settings?tab=roles&role=${data}`);
+    redirect(`/c/${cid}/settings?tab=roles&role=${data}&mode=edit`);
   });
 }
 
@@ -194,6 +194,26 @@ export async function saveRole(cid: string, roleId: string, _: ActionState, fd: 
     assertPerm(ctx, "roles.manage");
     must(await ctx.supabase.rpc("save_role", { p_role: roleId, p_name: str(fd, "name"), p_permissions: fd.getAll("perm").map(String) }));
     return done(cid, "Role saved. People on this role get the new permissions on their next page load.");
+  });
+}
+
+// a default role changed for this company only (0038); "Reset to standard" goes back to the BRD matrix
+export async function saveDefaultRole(cid: string, role: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "roles.manage");
+    must(await ctx.supabase.rpc("save_default_role", { p_company: cid, p_role: role, p_permissions: fd.getAll("perm").map(String) }));
+    return done(cid, "Role saved for this company. People on this role get the new permissions on their next page load.");
+  });
+}
+
+export async function resetDefaultRole(cid: string, role: string, _: ActionState, __: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "roles.manage");
+    must(await ctx.supabase.rpc("reset_default_role", { p_company: cid, p_role: role }));
+    revalidatePath(`/c/${cid}/settings`);
+    redirect(`/c/${cid}/settings?tab=roles&role=default:${role}`);
   });
 }
 

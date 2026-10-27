@@ -1,4 +1,4 @@
-// Custom roles (BRD v2.0 §5.2, migration 0037): the Owner or Company Admin copies a default role, renames it and
+// Custom roles (BRD v2.0 §5.2, migration 0037): the Company Admin copies a default role, renames it and
 // ticks module permissions; a person on that role gets exactly the ticked permissions.
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
@@ -6,7 +6,7 @@ import { PERMISSION_GROUPS } from "../src/lib/rbac";
 import { addMember, asUser, createDb, createUser } from "./db";
 
 let db: PGlite;
-let cid: string, cidB: string, owner: string, admin: string, hr: string, ravi: string, ravi2: string;
+let cid: string, cidB: string, owner: string, admin: string, adminB: string, hr: string, ravi: string, ravi2: string;
 
 const as = async <T = Record<string, unknown>>(who: string, sql: string, p: unknown[] = []) =>
   asUser(db, who, async () => (await db.query<T>(sql, p)).rows);
@@ -23,6 +23,7 @@ beforeAll(async () => {
   [{ id: cidB }] = await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Other') returning id`, [owner]);
   admin = await addMember(db, cid, "admin@corp.in", "company_admin");
   hr = await addMember(db, cid, "hr@corp.in", "hr");
+  adminB = await addMember(db, cidB, "adminb@corp.in", "company_admin");
   ravi = await addMember(db, cid, "ravi@corp.in", "employee");
   ravi2 = await addMember(db, cid, "ravi2@corp.in", "employee");
   for (const [u, e] of [[ravi, "ravi@corp.in"], [ravi2, "ravi2@corp.in"]]) {
@@ -31,16 +32,17 @@ beforeAll(async () => {
 }, 120000);
 
 describe("§5.2 · who manages custom roles", () => {
-  it("the Owner and the Company Admin can copy a role; HR can't", async () => {
-    expect(await clone(owner, "Owner's copy", "employee")).toBeTruthy();
+  it("as per BRD §5.2 the Company Admin copies roles; the Owner and HR (Settings R) can't", async () => {
     expect(await clone(admin, "Admin's copy", "manager")).toBeTruthy();
-    await expect(clone(hr, "HR copy", "hr")).rejects.toThrow(/Owner or a Company Admin/);
+    await expect(clone(owner, "Owner's copy", "employee")).rejects.toThrow(/Only a Company Admin/);
+    await expect(clone(hr, "HR copy", "hr")).rejects.toThrow(/Only a Company Admin/);
+    expect((await access(owner)).permissions).not.toContain("roles.manage");
   });
 
   it("the Owner and Super Admin roles can't be copied, and names are unique per company", async () => {
     await expect(clone(admin, "Boss", "owner")).rejects.toThrow(/Choose a role to copy/);
     await expect(clone(admin, "admin's COPY ", "employee")).rejects.toThrow(/already exists/);
-    expect(await as(owner, `select clone_role($1, 'Admin''s copy', 'employee', null)`, [cidB])).toHaveLength(1);   // other company: fine
+    expect(await as(adminB, `select clone_role($1, 'Admin''s copy', 'employee', null)`, [cidB])).toHaveLength(1);   // other company: fine
   });
 
   it("roles can't be written directly, only through the functions", async () => {
@@ -75,7 +77,7 @@ describe("§5.2 · a custom role's ticked permissions are what the person gets",
 
   it("ticking a permission the base role doesn't have grants it", async () => {
     const cur = (await sys<{ permission: string }>(`select permission from company_role_permissions where role_id = $1`, [sup])).map((r) => r.permission);
-    await as(owner, `select save_role($1, 'Security Supervisor', $2)`, [sup, [...cur, "audit.read", "settings.manage"]]);
+    await as(admin, `select save_role($1, 'Security Supervisor', $2)`, [sup, [...cur, "audit.read", "settings.manage"]]);
     expect(await as(ravi, `select has_perm($1, 'settings.manage') ok`, [cid])).toEqual([{ ok: true }]);
   });
 
@@ -128,13 +130,57 @@ describe("§5.2 · assigning and removing custom roles", () => {
   });
 
   it("a Company Admin copy without Settings can't grant platform support access", async () => {
-    const noSettings = await clone(owner, "Admin without settings", "company_admin");
+    const noSettings = await clone(admin, "Admin without settings", "company_admin");
     const keep = (await sys<{ permission: string }>(`select permission from company_role_permissions where role_id = $1`, [noSettings]))
       .map((r) => r.permission).filter((p) => p !== "settings.manage");
-    await as(owner, `select save_role($1, 'Admin without settings', $2)`, [noSettings, keep]);
+    await as(admin, `select save_role($1, 'Admin without settings', $2)`, [noSettings, keep]);
     const u = await addMember(db, cid, "admin2@corp.in", "company_admin");
     await sys(`update company_members set custom_role_id = $1 where company_id = $2 and user_id = $3`, [noSettings, cid, u]);
     await expect(as(u, `select grant_support_access($1, 4, 'ticket 1')`, [cid])).rejects.toThrow(/Only a Company Admin/);
     expect(await as(admin, `select grant_support_access($1, 4, 'ticket 1') id`, [cid])).toHaveLength(1);
+  });
+});
+
+describe("view and edit every role (decision of 27 Oct 2026, migration 0038)", () => {
+  const perms = async (who: string) => (await access(who)).permissions;
+
+  it("editing a default role changes it for this company only", async () => {
+    const mgr = await addMember(db, cid, "mgr@corp.in", "manager");
+    const mgrB = await addMember(db, cidB, "mgrb@corp.in", "manager");
+    expect(await perms(mgr)).toContain("attendance.approve");
+    const cur = await perms(mgr);
+    await as(admin, `select save_default_role($1, 'manager', $2)`, [cid, cur.filter((p) => p !== "attendance.approve" && !p.startsWith("feature."))]);
+    expect(await perms(mgr)).not.toContain("attendance.approve");
+    expect(await as(mgr, `select has_perm($1, 'attendance.approve') ok`, [cid])).toEqual([{ ok: false }]);
+    const b = (await asUser(db, mgrB, async () => (await db.query<{ a: { permissions: string[] } }>(`select my_access($1) a`, [cidB])).rows[0].a));
+    expect(b.permissions).toContain("attendance.approve");   // the other company keeps the standard Manager
+  });
+
+  it("a copy of an edited default role starts from this company's version", async () => {
+    const id = await clone(admin, "Shift lead", "manager");
+    expect((await sys(`select 1 from company_role_permissions where role_id = $1 and permission = 'attendance.approve'`, [id]))).toHaveLength(0);
+  });
+
+  it("Reset to standard puts the original ticks back", async () => {
+    await as(admin, `select reset_default_role($1, 'manager')`, [cid]);
+    const [{ id: mgr }] = await sys<{ id: string }>(`select id from auth.users where email = 'mgr@corp.in'`);
+    expect(await perms(mgr)).toContain("attendance.approve");
+    expect((await sys(`select action from audit_log where table_name = 'company_default_roles' order by at`)).map((r) => r.action)).toEqual(["permissions", "reset"]);
+  });
+
+  it("only the Company Admin edits; the Owner and HR can't, and the Owner role can't be edited", async () => {
+    await expect(as(owner, `select save_default_role($1, 'employee', array['chat.use'])`, [cid])).rejects.toThrow(/Only a Company Admin/);
+    await expect(as(hr, `select save_default_role($1, 'employee', array['chat.use'])`, [cid])).rejects.toThrow(/Only a Company Admin/);
+    await expect(as(admin, `select save_default_role($1, 'owner', array['chat.use'])`, [cid])).rejects.toThrow(/Owner role can't be changed/);
+    await expect(as(admin, `insert into company_default_roles (company_id, role, permissions) values ($1, 'hr', '{}')`, [cid])).rejects.toThrow();
+  });
+
+  it("the Company Admin role must keep Manage roles and Change people's roles", async () => {
+    await expect(as(admin, `select save_default_role($1, 'company_admin', array['settings.read','roles.manage'])`, [cid])).rejects.toThrow(/must keep/);
+    await as(admin, `select save_default_role($1, 'company_admin', array['settings.read','roles.manage','employees.assign_role'])`, [cid]);
+    expect(await perms(admin)).toEqual(expect.arrayContaining(["roles.manage", "employees.assign_role"]));
+    expect(await perms(admin)).not.toContain("salaries.read");
+    await as(admin, `select reset_default_role($1, 'company_admin')`, [cid]);
+    expect(await perms(admin)).toContain("salaries.read");
   });
 });
