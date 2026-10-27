@@ -14,7 +14,7 @@ Database rules marked † are covered by automated tests (`pnpm test`, 234 tests
 | AUTH-04 invitation + activation | ◐ | HR / Payroll and administrators invite; the employee activates with an email code and sets a password. No self-registration (0028) and no approval (0037). Email needs SMTP |
 | AUTH-05 forgot password | ◐ | other sessions signed out; needs SMTP |
 | AUTH-06/07 OTP storage + limits | ✅† | hashed, 10 min, single use, 5 attempts, 60 s cooldown, 5/hour per email and IP |
-| AUTH-08 Nodemailer over SMTP | ◐ | built; needs SMTP credentials (`pnpm email:test`) |
+| AUTH-08 Nodemailer over SMTP | ◐ | built. **OI-05 decided 27 Oct 2026: Brevo** (transactional SMTP). D-03 open: a sending domain with SPF + DKIM is still needed before live; until then a verified single sender is used for testing (`pnpm email:test`) |
 | AUTH-09 Supabase session | ✅ | |
 | AUTH-10 RBAC in RLS | ✅† | BRD §5.3 matrix in `role_permissions` + `has_perm` (0027); `tests/rbac.test.ts` checks it row by row |
 | AUTH-11 switch company | ✅ | no new sign-in; membership checked by `my_access` |
