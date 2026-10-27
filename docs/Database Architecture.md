@@ -100,6 +100,7 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0039 | `owner_manages_roles` | Decision of 27 Oct 2026 (option A): the Owner also gets `roles.manage` (beyond BRD §5.3 Settings R); role functions say "Only the Owner or a Company Admin" |
 | 0040 | `statutory_switch_notify` | Decision of 27 Oct 2026: when PF, ESI, PT, LWF or TDS is switched on or off in `statutory_settings`, every Owner and Company Admin is notified (link `/payroll/setup`); HR keeps the switches (BRD §5.3); the app confirms before a switch is turned off |
 | 0041 | `lockout_minutes` | BRD AUTH-02: `companies.lockout_minutes` (15 default, 30, 60 or 1440), set by the Company Admin in Settings → Policies; the longest among a login's companies applies (`src/lib/auth/lockout.ts`); Owner, Company Admin and HR unlock from the employee's Lifecycle tab |
+| 0042 | `who_is_in` | Decision of 27 Oct 2026 (beyond BRD §5.3): `who_is_in(company)` gives every member each colleague's name, code, photo and present yes/no for today (Present, Late, Early-out, Half-day, On Duty, WFH = in); never the reason; daily_attendance RLS unchanged. Dashboard → "Who's in today" for roles without `attendance.read_all` |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

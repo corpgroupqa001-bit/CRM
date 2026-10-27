@@ -42,7 +42,7 @@ EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles
 |---|---|---|
 | ATT-01 vendors | ◐ | generic push contract + CSV sync agent; vendor connectors after OI-01 |
 | ATT-02 push / pull | ◐ | push ✅†; pull via the sync agent |
-| ATT-03 … ATT-16 | ✅† | device registry + offline alert, immutable idempotent punches, exceptions queue, shifts, statuses, OT, late rule, field selfie + geofence, regularisation, live board, month lock (Company Admin unlocks), reports |
+| ATT-03 … ATT-16 | ✅† | device registry + offline alert, immutable idempotent punches, exceptions queue, shifts, statuses, OT, late rule, field selfie + geofence, regularisation, live board, month lock (Company Admin unlocks), reports. **Addition by decision (27 Oct):** every employee sees "Who's in today" on the dashboard, Present / Not in yet only, never the reason (0042) |
 | ATT-17 … ATT-19 leave | ✅† | switched on (0027) |
 | ATT-20 … ATT-35 work from home | ✅† | 0030: requests / approvals / HR ranges, eligibility, live-camera selfie check-in/out, breaks, server time, live timer (home + My attendance) and team board via Realtime, auto-close, WFH report. GPS only when enabled |
 | ATT-25 selfie access + retention | ✅ | visible only to HR / Payroll and the reporting manager (employee attendance page → Selfies); deleted after the company retention (default 90 days) by `/api/cron/retention`. **Addition by decision (27 Oct):** they can flag a selfie (wrong person / place); the employee explains; HR or the manager accepts or upholds (0035) |

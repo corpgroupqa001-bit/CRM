@@ -169,6 +169,46 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
     );
   }
 
+  // "Who's in today" (decision of 27 Oct 2026, 0042): Present / Not in yet for each colleague, never the reason.
+  // Roles that see the company's attendance in detail have the Company today section instead.
+  let whoIsIn: React.ReactNode = null;
+  if (!perms.has("attendance.read_all")) {
+    const dow = new Date(`${today}T00:00:00Z`).getUTCDay();
+    const [{ data: people }, { data: holiday }] = await Promise.all([
+      supabase.rpc("who_is_in", { p_company: cid }),
+      supabase.from("holidays").select("name").eq("company_id", cid).eq("date", today).is("branch_id", null).maybeSingle(),
+    ]);
+    const list = (people ?? []) as { employee_id: string; full_name: string; emp_code: string; photo_url: string | null; present: boolean; me: boolean }[];
+    const inCount = list.filter((p) => p.present).length;
+    const dayOff = holiday ? `Today is a holiday (${holiday.name}).` : company.weekly_offs.includes(dow) ? "Today is a weekly off." : null;
+    const row = (p: (typeof list)[number]) => (
+      <li key={p.employee_id} className={`flex items-center gap-3 px-4 py-2.5 ${p.me ? "bg-slate-50" : ""}`}>
+        {p.photo_url
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={p.photo_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+          : <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">{p.full_name.slice(0, 2).toUpperCase()}</span>}
+        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-900">{p.full_name}{p.me && <span className="font-normal text-slate-500"> (you)</span>}</span>
+          <span className="block text-xs text-slate-500">{p.emp_code}</span></span>
+        {p.present ? <Badge value="present" text="Present" /> : <Badge value="planned" text="Not in yet" />}
+      </li>
+    );
+    whoIsIn = list.length > 1 && (
+      <Card title="Who's in today" pad={false} description={dayOff ?? `${inCount} in · ${list.length - inCount} not in yet · ${list.length} people`}>
+        {!dayOff && (
+          <>
+            <ul className="divide-y divide-slate-100">{list.slice(0, 10).map(row)}</ul>
+            {list.length > 10 && (
+              <details className="border-t border-slate-100">
+                <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium text-brand-600 hover:text-brand-700">Show all {list.length}</summary>
+                <ul className="divide-y divide-slate-100">{list.slice(10).map(row)}</ul>
+              </details>
+            )}
+          </>
+        )}
+      </Card>
+    );
+  }
+
   const bal = (b: { opening: number; accrued: number; used: number; pending: number }) => Number(b.opening) + Number(b.accrued) - Number(b.used) - Number(b.pending);
 
   return (
@@ -233,6 +273,7 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
             </Card>
           </section>
         )}
+        {whoIsIn}
         {!employee && !team && <Empty title={`Welcome to ${company.name}`} icon={Users}>Your account isn&apos;t linked to an employee record yet. Ask your HR Manager or administrator to link it; your attendance, tasks and payslips will then appear here.</Empty>}
         {team}
       </div>
