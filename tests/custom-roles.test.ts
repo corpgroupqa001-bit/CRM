@@ -32,11 +32,11 @@ beforeAll(async () => {
 }, 120000);
 
 describe("§5.2 · who manages custom roles", () => {
-  it("as per BRD §5.2 the Company Admin copies roles; the Owner and HR (Settings R) can't", async () => {
+  it("the Company Admin and (decision of 27 Oct, 0039) the Owner copy roles; HR (Settings R) can't", async () => {
     expect(await clone(admin, "Admin's copy", "manager")).toBeTruthy();
-    await expect(clone(owner, "Owner's copy", "employee")).rejects.toThrow(/Only a Company Admin/);
-    await expect(clone(hr, "HR copy", "hr")).rejects.toThrow(/Only a Company Admin/);
-    expect((await access(owner)).permissions).not.toContain("roles.manage");
+    expect(await clone(owner, "Owner's copy", "employee")).toBeTruthy();
+    await expect(clone(hr, "HR copy", "hr")).rejects.toThrow(/Only the Owner or a Company Admin/);
+    expect((await access(owner)).permissions).toContain("roles.manage");
   });
 
   it("the Owner and Super Admin roles can't be copied, and names are unique per company", async () => {
@@ -168,9 +168,11 @@ describe("view and edit every role (decision of 27 Oct 2026, migration 0038)", (
     expect((await sys(`select action from audit_log where table_name = 'company_default_roles' order by at`)).map((r) => r.action)).toEqual(["permissions", "reset"]);
   });
 
-  it("only the Company Admin edits; the Owner and HR can't, and the Owner role can't be edited", async () => {
-    await expect(as(owner, `select save_default_role($1, 'employee', array['chat.use'])`, [cid])).rejects.toThrow(/Only a Company Admin/);
-    await expect(as(hr, `select save_default_role($1, 'employee', array['chat.use'])`, [cid])).rejects.toThrow(/Only a Company Admin/);
+  it("the Owner and Company Admin edit; HR can't, and the Owner role can't be edited", async () => {
+    await as(owner, `select save_default_role($1, 'employee', array['chat.use','tasks.use'])`, [cid]);
+    await as(owner, `select reset_default_role($1, 'employee')`, [cid]);
+    await expect(as(hr, `select save_default_role($1, 'employee', array['chat.use'])`, [cid])).rejects.toThrow(/Only the Owner or a Company Admin/);
+    await expect(as(owner, `select save_default_role($1, 'owner', array['chat.use'])`, [cid])).rejects.toThrow(/Owner role can't be changed/);
     await expect(as(admin, `select save_default_role($1, 'owner', array['chat.use'])`, [cid])).rejects.toThrow(/Owner role can't be changed/);
     await expect(as(admin, `insert into company_default_roles (company_id, role, permissions) values ($1, 'hr', '{}')`, [cid])).rejects.toThrow();
   });

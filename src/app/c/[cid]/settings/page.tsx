@@ -411,7 +411,8 @@ export default async function Settings({ params, searchParams }: { params: Promi
   }
 
   if (tab === "roles") {
-    // BRD §5.2: the Company Admin copies and edits roles; the Owner and HR / Payroll (Settings R) view them.
+    // BRD §5.2: the Company Admin copies and edits roles, and so does the Owner (decision of 27 Oct, 0039);
+    // HR / Payroll (Settings R) view them.
     // Editing a default role changes it for this company only (0038); the Owner role is view only.
     const canEdit = perms.has("roles.manage");
     const [{ data: customRoles }, { data: standard }, { data: own }, { data: held }] = await Promise.all([
@@ -454,7 +455,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             </ActionForm>
           </Card>
         ) : (
-          <p className="text-sm text-slate-500">View only. A Company Admin creates and changes roles (BRD §5.2).</p>
+          <p className="text-sm text-slate-500">View only. The Owner or a Company Admin creates and changes roles.</p>
         )}
         <Card title="Roles" pad={false}>
           <Table head={["Role", "Type", "Copied from", "Permissions", "People", ""]}>

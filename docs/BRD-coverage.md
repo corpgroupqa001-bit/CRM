@@ -17,7 +17,7 @@ Database rules marked † are covered by automated tests (`pnpm test`, 233 tests
 | AUTH-08 Nodemailer over SMTP | ◐ | built. **OI-05 decided 27 Oct 2026: Brevo** (transactional SMTP). D-03 open: a sending domain with SPF + DKIM is still needed before live; until then a verified single sender is used for testing (`pnpm email:test`) |
 | AUTH-09 Supabase session | ✅ | |
 | AUTH-10 RBAC in RLS | ✅† | BRD §5.3 matrix in `role_permissions` + `has_perm` (0027); `tests/rbac.test.ts` checks it row by row |
-| §5.2 Custom roles | ✅ | Settings → Roles: the Company Admin copies a default role, renames it and ticks module permissions; assign under Users & roles (0037). Owner and HR / Payroll view only (Settings R). **Addition by decision (27 Oct):** default roles except Owner can be edited per company, with Reset to standard (0038). `tests/custom-roles.test.ts` |
+| §5.2 Custom roles | ✅ | Settings → Roles: the Company Admin copies a default role, renames it and ticks module permissions; assign under Users & roles (0037). HR / Payroll view only (Settings R). **Additions by decision (27 Oct):** default roles except Owner can be edited per company, with Reset to standard (0038); the Owner manages roles too (0039). `tests/custom-roles.test.ts` |
 | AUTH-11 switch company | ✅ | no new sign-in; membership checked by `my_access` |
 | AUTH-12 idle timeout, log out everywhere | ✅ | |
 | AUTH-13 change email | ◐ | needs SMTP |
