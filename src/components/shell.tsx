@@ -28,6 +28,8 @@ type Props = {
   isMultiOwner: boolean;
   /** platform Super Admin: companies are added in /admin */
   canAddCompany?: boolean;
+  /** owners create further companies themselves (BRD COM-01) */
+  isOwner?: boolean;
   unread: number;
   userId: string;
   idleMinutes: number;
@@ -127,7 +129,7 @@ export function Shell(p: Props) {
                 <Building2 className="h-4 w-4" /> All companies overview
               </Link>
             )}
-            {p.canAddCompany && <Link href="/admin" className="flex items-center gap-2 px-2 py-1.5 text-sm text-brand-700 hover:underline">+ Add a company</Link>}
+            {(p.isOwner || p.canAddCompany) && <Link href={p.isOwner ? "/owner?new=1" : "/admin"} className="flex items-center gap-2 px-2 py-1.5 text-sm text-brand-700 hover:underline">+ Add a company</Link>}
           </div>
         )}
       </div>

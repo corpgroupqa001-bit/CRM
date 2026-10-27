@@ -35,6 +35,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
       companies={companies}
       isMultiOwner={companies.filter((c) => c.role === "owner").length >= 2}
       canAddCompany={!!superAdmin}
+      isOwner={companies.some((c) => c.role === "owner")}
       unread={unread ?? 0}
       userId={user.id}
       idleMinutes={profile?.idle_timeout_min ?? 30}

@@ -363,86 +363,51 @@ describe("Staff directory and employee removal", () => {
   });
 });
 
-describe("Companies are created only by the Super Admin (0020)", () => {
-  it("a signed-in user can't create a company or make themselves an owner", async () => {
-    await expect(as("outsider", `insert into companies (owner_id, name) values ($1, 'Mine')`, [U.outsider])).rejects.toThrow(/row-level security/);
-    await expect(as("emp", `insert into companies (owner_id, name) values ($1, 'Mine')`, [U.emp])).rejects.toThrow(/row-level security/);
-    await expect(as("owner", `select sa_create_company('Second', 'owner@corp.in')`)).rejects.toThrow(/Super admin only/);
-    expect(await sys(`select * from company_members where user_id = $1 and role = 'owner'`, [U.outsider])).toHaveLength(0);
+describe("Companies (AUTH-01, COM-01): owners create their companies; employees are invited", () => {
+  it("a signed-in account creates a company and becomes its Owner, with an employee record", async () => {
+    U.newOwner = await createUser(db, "founder@corp.in");
+    await sys(`update profiles set full_name = 'Farah Founder' where id = $1`, [U.newOwner]);
+    const [{ id: co }] = await as<{ id: string }>("newOwner", `select create_company('Founder Foods') id`);
+    expect(await sys(`select role from company_members where company_id = $1 and user_id = $2`, [co, U.newOwner])).toEqual([{ role: "owner" }]);
+    expect(await sys(`select first_name, last_name from employees where company_id = $1 and user_id = $2`, [co, U.newOwner])).toEqual([{ first_name: "Farah", last_name: "Founder" }]);
+    expect((await perms("newOwner", co))).toMatchObject({ allowed: true, role: "owner" });
+    expect(await sys(`select * from audit_log where company_id = $1 and action = 'create_company'`, [co])).toHaveLength(1);
+    // an owner can create several companies, each a separate tenant
+    const [{ id: co2 }] = await as<{ id: string }>("newOwner", `select create_company('Founder Logistics') id`);
+    expect(co2).not.toBe(co);
+    expect(await count("newOwner", `select * from employees where company_id = $1`, [co2])).toBe(1);
+    await expect(as("newOwner", `select create_company('  ')`)).rejects.toThrow(/name is required/);
   });
 
-  it("the Super Admin creates a company for an existing account, which becomes its owner with an employee record", async () => {
+  it("nobody creates a company for someone else or inserts one directly", async () => {
+    await expect(as("emp", `insert into companies (owner_id, name) values ($1, 'Mine')`, [U.emp])).rejects.toThrow(/row-level security/);
+    await expect(as("emp", `select create_company_for($1, 'Theirs')`, [U.outsider])).rejects.toThrow(/permission denied/);
+    await expect(as("owner", `select sa_create_company('Second', 'owner@corp.in')`)).rejects.toThrow(/Super admin only/);
+  });
+
+  it("the Super Admin can still create a company for an existing account", async () => {
     const [{ id }] = await as<{ id: string }>("sa", `select sa_create_company('New Co', 'outsider@corp.in') id`);
-    const [m] = await sys<{ role: string; active: boolean }>(`select role, active from company_members where company_id = $1 and user_id = $2`, [id, U.outsider]);
-    expect(m).toEqual({ role: "owner", active: true });
-    expect(await sys(`select * from employees where company_id = $1 and user_id = $2`, [id, U.outsider])).toHaveLength(1);
-    expect(await sys(`select * from audit_log where action = 'super_admin_create_company' and company_id = $1`, [id])).toHaveLength(1);
-    const [{ id: own }] = await as<{ id: string }>("sa", `select sa_create_company('Operator Co', 'sa@corp.in') id`);   // the operator may own one
-    expect(await sys(`select role from company_members where company_id = $1 and user_id = $2`, [own, U.sa])).toEqual([{ role: "owner" }]);
+    expect(await sys(`select role, active from company_members where company_id = $1 and user_id = $2`, [id, U.outsider])).toEqual([{ role: "owner", active: true }]);
     await expect(as("sa", `select sa_create_company('Ghost', 'nobody@corp.in')`)).rejects.toThrow(/No account/);
   });
-});
 
-describe("Candidate sign-up and approval (0021)", () => {
-  let req: string, hrDesig: string, plainDesig: string, hrDept: string;
-  it("only an administrator sets which access role a designation gives", async () => {
-    [{ id: hrDesig }] = await as<{ id: string }>("admin", `insert into designations (company_id, name, access_role) values ($1, 'HR Executive', 'hr') returning id`, [cid]);
-    // BRD §5.3: Settings are read-only for HR, so HR can't add designations or their access role at all
-    await expect(as("hr", `insert into designations (company_id, name, access_role) values ($1, 'Boss', 'company_admin')`, [cid])).rejects.toThrow(/row-level security|Only an administrator/);
-    [{ id: plainDesig }] = await as<{ id: string }>("admin", `insert into designations (company_id, name) values ($1, 'Clerk') returning id`, [cid]);
-    expect(await count("hr", `update designations set access_role = 'company_admin' where id = $1 returning id`, [plainDesig])).toBe(0);
-    // 0022: designations sit under a department; candidates pick the department first
-    [{ id: hrDept }] = await sys<{ id: string }>(`insert into departments (company_id, name) values ($1, 'Human Resources') returning id`, [cid]);
-    await as("admin", `update designations set department_id = $1 where id = any($2)`, [hrDept, [hrDesig, plainDesig]]);
-  });
-
-  it("a candidate requests to join with a designation and gets no access until approved", async () => {
+  it("employees don't self-register: new join requests are refused", async () => {
     U.cand = await createUser(db, "cand@corp.in");
-    [{ id: req }] = await as<{ id: string }>("cand", `select submit_join_request($1, 'Ravi Kumar', '98480 11111', $2, $3, null) id`, [cid, hrDesig, hrDept]);
-    expect((await as<{ a: { allowed: boolean } }>("cand", `select my_access($1) a`, [cid]))[0].a.allowed).toBe(false);
-    expect(await count("cand", `select * from employees`)).toBe(0);
-    expect(await count("cand", `select * from join_requests`)).toBe(1);                 // their own request
-    await expect(as("cand", `insert into join_requests (company_id, user_id, full_name, email) values ($1, $2, 'x', 'x')`, [cid, U.cand])).rejects.toThrow(/row-level security/);
-    await expect(as("cand", `select submit_join_request($1, 'Ravi', null, $2, $3, null)`, [cid, (await sys<{ id: string }>(`select id from designations where company_id = $1 limit 1`, [cidB]))[0]?.id ?? cid, hrDept]))
-      .rejects.toThrow(/designation/);
-    expect(await count("admin", `select * from join_requests where status = 'pending'`)).toBe(1);
-    expect(await count("hr", `select * from join_requests`)).toBe(1);                    // HR sees it (employees.account) but can't approve
-    expect(await count("ownerB", `select * from join_requests`)).toBe(0);                // other companies don't see it
-  });
-
-  it("only an administrator approves, once; the candidate then gets the confirmed role", async () => {
-    await expect(as("hr", `select approve_join_request($1, 'hr')`, [req])).rejects.toThrow(/Only an administrator/);
-    await expect(as("cand", `select approve_join_request($1, 'company_admin')`, [req])).rejects.toThrow(/Only an administrator/);
-    await expect(as("admin", `select approve_join_request($1, 'owner')`, [req])).rejects.toThrow(/access role/);
-    await as("admin", `select approve_join_request($1, 'hr')`, [req]);
-    const [{ a }] = await as<{ a: { allowed: boolean; role: string } }>("cand", `select my_access($1) a`, [cid]);
-    expect(a).toMatchObject({ allowed: true, role: "hr" });
-    const [e] = await sys<{ designation_id: string; phone: string }>(`select designation_id, phone from employees where user_id = $1`, [U.cand]);
-    expect(e).toEqual({ designation_id: hrDesig, phone: "98480 11111" });
-    await expect(as("admin", `select approve_join_request($1, 'hr')`, [req])).rejects.toThrow(/already approved/);
-    await expect(as("cand", `select submit_join_request($1, 'Ravi', null, $2, $3, null)`, [cid, hrDesig, hrDept])).rejects.toThrow(/already belong/);
-    expect(await sys(`select * from audit_log where table_name = 'join_requests' and action = 'approve'`)).toHaveLength(1);
-  });
-
-  it("a rejected candidate stays without access", async () => {
-    U.cand2 = await createUser(db, "cand2@corp.in");
-    const [{ id }] = await as<{ id: string }>("cand2", `select submit_join_request($1, 'Asha', null, $2, $3, null) id`, [cid, plainDesig, hrDept]);
-    await as("admin", `select reject_join_request($1, 'Not our employee')`, [id]);
-    expect((await as<{ a: { allowed: boolean } }>("cand2", `select my_access($1) a`, [cid]))[0].a.allowed).toBe(false);
+    const [d] = await sys<{ id: string; department_id: string | null }>(`select id, department_id from designations where company_id = $1 limit 1`, [cid]);
+    await expect(as("cand", `select submit_join_request($1, 'Ravi', null, $2, $3, null)`, [cid, d?.id ?? null, d?.department_id ?? null]))
+      .rejects.toThrow(/invitation/);
+    expect((await perms("cand")).allowed).toBe(false);
   });
 
   it("removed employees are hidden from the directory but their record is kept", async () => {
-    await sys(`update employees set removed_at = now(), status = 'exited', last_working_day = current_date where user_id = $1`, [U.cand]);
-    expect(await count("admin", `select * from employee_directory where user_id = $1`, [U.cand])).toBe(0);
-    expect(await count("admin", `select * from employees where user_id = $1`, [U.cand])).toBe(1);
-    expect((await as<{ a: { allowed: boolean } }>("cand", `select my_access($1) a`, [cid]))[0].a.allowed).toBe(false);
+    await sys(`update employees set removed_at = now(), status = 'exited', last_working_day = current_date where id = $1`, [E.emp2]);
+    expect(await count("admin", `select * from employee_directory where id = $1`, [E.emp2])).toBe(0);
+    expect(await count("admin", `select * from employees where id = $1`, [E.emp2])).toBe(1);
   });
 });
 
 describe("Department → designation (0022)", () => {
   let eng: string, hr: string, dev: string, hrExec: string;
-  const submit = (who: string, desig: string | null, dept: string | null) =>
-    as(who, `select submit_join_request($1, 'Kiran', null, $2, $3, null) id`, [cid, desig, dept]);
 
   it("designations belong to a department; the same title may exist in two departments", async () => {
     [{ id: eng }] = await as<{ id: string }>("admin", `insert into departments (company_id, name) values ($1, 'Engineering / IT') returning id`, [cid]);
@@ -458,22 +423,11 @@ describe("Department → designation (0022)", () => {
     await expect(as("admin", `update designations set department_id = $1 where id = $2`, [other, dev])).rejects.toThrow(/different company/);
   });
 
-  it("the server refuses a designation from another department, a missing department, and inactive ones", async () => {
-    U.cand3 = await createUser(db, "cand3@corp.in");
-    await expect(submit("cand3", dev, null)).rejects.toThrow(/Choose your department/);
-    await expect(submit("cand3", hrExec, eng)).rejects.toThrow(/not part of the selected department/);   // HR role under Engineering
-    await expect(submit("cand3", null, eng)).rejects.toThrow(/Choose your designation/);
-
-    await as("admin", `update designations set active = false where id = $1`, [dev]);
-    await expect(submit("cand3", dev, eng)).rejects.toThrow(/Choose your designation/);
-    await as("admin", `update designations set active = true where id = $1`, [dev]);
-
-    await as("admin", `update departments set active = false where id = $1`, [eng]);
-    await expect(submit("cand3", dev, eng)).rejects.toThrow(/Choose your department/);
-    await as("admin", `update departments set active = true where id = $1`, [eng]);
-
-    const [{ id }] = await submit("cand3", dev, eng) as { id: string }[];
-    expect(await sys(`select department_id, designation_id from join_requests where id = $1`, [id])).toEqual([{ department_id: eng, designation_id: dev }]);
+  it("the server refuses a designation that isn't part of the chosen department", async () => {
+    // employees no longer self-register (0028); the same rule guards the Super Admin's assignments
+    await expect(sys(`select sa_check_assignment($1, 'employee', $2, $3)`, [cid, eng, hrExec])).rejects.toThrow(/not part of the selected department/);
+    await sys(`select sa_check_assignment($1, 'employee', $2, $3)`, [cid, eng, dev]);
+    await expect(sys(`select sa_check_assignment($1, 'finance', $2, $3)`, [cid, eng, dev])).rejects.toThrow(/access role/);
   });
 
   it("only HR / administrators manage the lists; a department in use can't be deleted", async () => {

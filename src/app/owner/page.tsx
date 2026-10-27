@@ -3,12 +3,14 @@ import { requireUser } from "@/lib/context";
 import { createClient } from "@/lib/supabase/server";
 import { Badge, Card, Empty, PageHeader, Stat, Table } from "@/components/ui";
 import { money, todayIST } from "@/lib/format";
-import { logout } from "@/app/(auth)/actions";
+import { createCompany, logout } from "@/app/(auth)/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
+import { Field } from "@/components/ui";
 import { setCompanyStatus } from "./actions";
 
 export const metadata = { title: "All companies" };
 
-type Search = { q?: string; status?: string; sort?: string };
+type Search = { q?: string; status?: string; sort?: string; new?: string };
 
 // COM-07 consolidated dashboard + COM-11 companies list
 export default async function OwnerPage({ searchParams }: { searchParams: Promise<Search> }) {
@@ -61,7 +63,16 @@ export default async function OwnerPage({ searchParams }: { searchParams: Promis
         <PageHeader title="All companies" subtitle="Consolidated view across every company you own or administer."
           actions={<>{/* file download from an API route, not page navigation */}
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/api/export/companies" className="btn-secondary">Export</a><Link href="/onboarding" className="btn-primary">+ New company</Link></>} />
+          <a href="/api/export/companies" className="btn-secondary">Export</a><Link href="/owner?new=1" className="btn-primary">+ New company</Link></>} />
+        {sp.new && (
+          <Card title="Create a company" description="You become its Owner. Each company's employees, attendance and payroll stay separate." className="mb-6">
+            <ActionForm action={createCompany} className="flex flex-wrap items-end gap-3 [&>p]:basis-full">
+              <Field label="Company name" className="min-w-0 flex-[1_1_280px]"><input className="input" name="company_name" required maxLength={120} placeholder="Acme Logistics Pvt Ltd" autoFocus /></Field>
+              <SubmitButton pendingText="Creating…">Create company</SubmitButton>
+              <Link href="/owner" className="btn-ghost">Cancel</Link>
+            </ActionForm>
+          </Card>
+        )}
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Stat label="Headcount" value={totals.h} />
           <Stat label="Present today" value={`${totals.p} (${totals.h ? Math.round((totals.p / totals.h) * 100) : 0}%)`} tone="green" />

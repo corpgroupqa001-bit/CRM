@@ -49,71 +49,65 @@ function otpError(err: unknown): ActionState {
 }
 
 // ---------------------------------------------------------------------------
-// Sign-up (candidate): name, email, company, designation, phone → account + join request. The
-// candidate can't sign in until an Administrator of that company approves them (migration 0021).
-// It never creates a company or ownership.
+// AUTH-01 owner sign-up: name, email and company name → (email code, when verification is on) →
+// password. The account becomes the Owner of the new company (create_company_for, migration 0028).
+// Employees don't sign up here: HR adds them and the system emails an invitation (AUTH-04).
 // ---------------------------------------------------------------------------
 export async function signupStart(_: ActionState, fd: FormData): Promise<ActionState> {
   const name = str(fd, "name");
   const email = normaliseEmail(str(fd, "email") ?? "");
+  const company = str(fd, "company_name");
   if (!name || !EMAIL_RE.test(email)) return { error: "Enter your name and a valid email." };
+  if (!company) return { error: "Enter your company's name." };
   if (fd.get("consent") !== "on") return { error: "Please agree to the privacy notice to continue." };
-  if (!emailVerificationOn()) return signupWithPassword(name, email, fd);
-  // with email codes on, the request itself is made on /onboarding after the address is verified
+  if (!emailVerificationOn()) return signupWithPassword(name, email, company, fd);
   try {
     if (await findUserByEmail(email)) return { error: "An account with this email already exists. Sign in instead." };
-    await sendCode(email, "signup", { name });
+    await sendCode(email, "signup", { name, company });
   } catch (err) {
     return otpError(err);
   }
   redirect(verifyUrl(email, "signup"));
 }
 
-// verification off: create the account with a password and sign in immediately
-async function signupWithPassword(name: string, email: string, fd: FormData): Promise<ActionState> {
+// verification off: create the account with a password, create the company and sign in
+async function signupWithPassword(name: string, email: string, company: string, fd: FormData): Promise<ActionState> {
   const password = String(fd.get("password") ?? "");
   if (!validPassword(password)) return { error: PASSWORD_RULE };
   if (password !== String(fd.get("confirm") ?? "")) return { error: "The passwords don't match." };
-  if (!str(fd, "company") || !str(fd, "department") || !str(fd, "designation")) return { error: "Choose your company, department and designation." };
-  if (!str(fd, "phone")) return { error: "Enter your mobile number." };
   let userId: string | undefined;
+  let cid: string;
   try {
     if (await findUserByEmail(email)) return { error: "An account with this email already exists. Sign in instead." };
     const user = await createPasswordUser(email, password, name);
     userId = user.id;
-    // no linking to invited employee records here: the email isn't verified on this path, so it
-    // must not unlock a company. The administrator checks the details and approves instead.
     await initProfile(user.id, name);
-    // the request is made as the new user (one client instance holds the session in this request)
-    const supabase = await createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) throw signInError;
-    const { error } = await supabase.rpc("submit_join_request", joinArgs(fd, name));
-    if (error) throw error;
-    await supabase.auth.signOut({ scope: "local" });   // no access until approved
+    cid = await createCompanyFor(user.id, company);
+    await signInWithPassword(email, password, "signup");
   } catch (err) {
-    // don't leave an account behind without a request
+    // don't leave an account behind without its company
     if (userId) await createAdminClient().auth.admin.deleteUser(userId);
     return { error: errorMessage(err) };
   }
-  redirect("/login?pending=1");
+  redirect(`/c/${cid}/dashboard`);
 }
 
-function joinArgs(fd: FormData, name: string) {
-  return { p_company: str(fd, "company"), p_full_name: name, p_phone: str(fd, "phone"), p_designation: str(fd, "designation"),
-    p_department: str(fd, "department") ?? null, p_note: str(fd, "note") ?? null };
+async function createCompanyFor(userId: string, name: string): Promise<string> {
+  const { data, error } = await createAdminClient().rpc("create_company_for", { p_user: userId, p_name: name });
+  if (error) throw error;
+  return data as string;
 }
 
-/** A signed-in account without a company asks to join one (used on /onboarding). */
-export async function requestToJoin(_: ActionState, fd: FormData): Promise<ActionState> {
+/** A signed-in account creates a company it owns (COM-01; used on /onboarding and /owner). */
+export async function createCompany(_: ActionState, fd: FormData): Promise<ActionState> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const name = str(fd, "name");
-  if (!name) return { error: "Enter your full name." };
-  const { error } = await supabase.rpc("submit_join_request", joinArgs(fd, name));
+  const name = str(fd, "company_name");
+  if (!name) return { error: "Enter the company's name." };
+  const { data, error } = await supabase.rpc("create_company", { p_name: name });
   if (error) return { error: error.message };
-  redirect("/onboarding");
+  redirect(`/c/${data}/dashboard`);
 }
 
 /**
@@ -148,8 +142,8 @@ async function signInWithPassword(email: string, password: string, method: strin
   await recordLogin(data.user.id, method);
 }
 
-/** Consent and display name for a new account. No company or role: those come from an invitation
- * or from the platform Super Admin (companies are created only in /admin, migration 0020). */
+/** Consent and display name for a new account. Its company comes from owner sign-up (create_company_for)
+ * or, for employees, from an invitation. */
 async function initProfile(userId: string, name: string) {
   await createAdminClient().from("profiles").update({ full_name: name, consent_at: new Date().toISOString() }).eq("id", userId);
 }
@@ -264,12 +258,13 @@ async function completeVerification(rec: OtpRecord, next: string | null): Promis
   const admin = createAdminClient();
 
   if (purpose === "signup") {
-    const payload = rec.payload as { name: string };
+    const payload = rec.payload as { name: string; company?: string };
     const user = await ensureUser(email, payload.name);
     await signInVerifiedEmail(email, "signup");
     await initProfile(user.id, payload.name);
-    await linkInvitedEmployee(user.id, email);
-    return `/set-password?next=${encodeURIComponent("/")}&welcome=1`;
+    // AUTH-01: the verified owner's company; then they set a password
+    const cid = payload.company ? await createCompanyFor(user.id, payload.company) : null;
+    return `/set-password?next=${encodeURIComponent(cid ? `/c/${cid}/dashboard` : "/onboarding")}&welcome=1`;
   } else if (purpose === "login") {
     if (!(await findUserByEmail(email))) throw new OtpError("not_found", "No account for this email.");
     await signInVerifiedEmail(email, "otp");
