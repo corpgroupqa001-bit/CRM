@@ -127,6 +127,18 @@ export async function setOrgActive(cid: string, table: "departments" | "designat
   revalidatePath(`/c/${cid}/settings`);
 }
 
+// Designation → access role: suggested when a candidate with this designation is approved.
+// Administrators only (the database refuses anyone else).
+export async function setDesignationAccess(cid: string, id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "employees.assign_role");
+    const role = str(fd, "access_role") ?? null;
+    if (role && !ASSIGNABLE_ROLES.includes(role as Role)) throw new Error("Unknown role.");
+    must(await ctx.supabase.from("designations").update({ access_role: role }).eq("id", id).eq("company_id", cid));
+    return done(cid, "Saved.");
+  });
+}
 
 // COM-05 holidays per branch
 export async function addHoliday(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {

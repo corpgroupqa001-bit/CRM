@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decrypt, encrypt, last4 } from "@/lib/crypto";
 import { attempt, bool, must, str, type ActionState } from "@/lib/actions";
 import { inviteEmail, sendMail } from "@/lib/email/mailer";
+import { PASSWORD_RULE, validPassword } from "@/lib/auth/session";
 
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
@@ -350,8 +351,60 @@ export async function importEmployees(cid: string, _: ActionState, fd: FormData)
 }
 
 
+// HR sets a login password for an employee. If they have not activated yet, this creates their
+// account and links it, so they can sign in straight away (useful while email verification is off).
+export async function setEmployeePassword(cid: string, eid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "employees.account");
+    const { supabase, user } = ctx;
+    const password = String(fd.get("password") ?? "");
+    if (!validPassword(password)) throw new Error(PASSWORD_RULE);
+    const e = must(await supabase.from("employees").select("id, email, user_id, invite_role, status").eq("id", eid).eq("company_id", cid).single());
+    if (!["active", "notice"].includes(e.status)) throw new Error("Reactivate the employee first.");
+    const admin = createAdminClient();
+    if (e.user_id) {
+      const { data: m } = await admin.from("company_members").select("role").eq("company_id", cid).eq("user_id", e.user_id).maybeSingle();
+      if (m?.role === "owner" && e.user_id !== user.id) throw new Error("Only the owner can change the owner's password.");
+      if (m && ["owner", "company_admin"].includes(m.role) && !can(ctx, "employees.assign_role")) throw new Error("Only an admin can change an admin's password.");
+      const { error } = await admin.auth.admin.updateUserById(e.user_id, { password });
+      if (error) throw error;
+      return "Password updated. Share it with the employee securely and ask them to change it after signing in.";
+    }
+    // an account with this email already exists (maybe in another company): never set its password
+    // from here; that would let one company's administrator take over someone else's login
+    const { data: existing } = await admin.from("profiles").select("id").eq("email", e.email.toLowerCase()).maybeSingle();
+    if (existing) throw new Error("This email already has an account. Send an invite instead; they sign in with their existing password.");
+    const { data, error } = await admin.auth.admin.createUser({ email: e.email.toLowerCase(), password, email_confirm: true });
+    if (error) throw error;
+    const uid = data.user.id;
+    await admin.from("employees").update({ user_id: uid }).eq("id", eid);
+    await admin.from("company_members").upsert({ company_id: cid, user_id: uid, role: e.invite_role ?? "employee", active: true }, { onConflict: "company_id,user_id" });
+    revalidatePath(`/c/${cid}/employees/${eid}`);
+    return `Login created for ${e.email}. Share the password securely; they can change it under Account & security.`;
+  });
+}
 
+// Candidate sign-ups (migration 0021): approve once with the confirmed access role, or reject.
+export async function approveJoin(cid: string, id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "employees.account", "employees.assign_role");
+    must(await ctx.supabase.rpc("approve_join_request", { p_request: id, p_role: str(fd, "role") }));
+    revalidatePath(`/c/${cid}/employees`, "layout");
+    return "Approved. They can sign in now.";
+  });
+}
 
+export async function rejectJoin(cid: string, id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "employees.account");
+    must(await ctx.supabase.rpc("reject_join_request", { p_request: id, p_note: str(fd, "note") ?? null }));
+    revalidatePath(`/c/${cid}/employees/approvals`);
+    return "Rejected.";
+  });
+}
 
 // Removing an employee (Administrator): a record created by mistake (no login, no history) is deleted.
 // Anyone else is exited today, signed out of this company for good, and hidden from every list;

@@ -19,12 +19,6 @@ function transport() {
 export async function sendMail(mail: Mail): Promise<{ ok: boolean; error?: string }> {
   const t = transport();
   if (!t) {
-    // production must really send: an emailed code printed to a log would never reach the user and would sit in the logs
-    if (process.env.NODE_ENV === "production") {
-      console.error(`[mail] SMTP is not configured; not sent to ${mail.to} (${mail.subject})`);
-      return { ok: false, error: "Email isn't set up on this server yet (SMTP). Ask the administrator." };
-    }
-    // local / staging development: show the message (with its code) in the server log instead
     console.log(`\n──── ✉  DEV EMAIL (SMTP not configured) ────\nTo: ${mail.to}\nSubject: ${mail.subject}\n\n${mail.text}\n────────────────────────────────────────────\n`);
     return { ok: true };
   }

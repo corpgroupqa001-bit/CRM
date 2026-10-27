@@ -3,15 +3,15 @@
 Checked against *BRD – CRM & Workforce Management Platform* **v2.0** (26 Oct 2026), 27 Oct 2026, after migrations 0027–0030.
 ✅ built · ◐ built with a stated limit · ✗ not built (with reason)
 
-Database rules marked † are covered by automated tests (`pnpm test`, 234 tests on the real migrations).
+Database rules marked † are covered by automated tests (`pnpm test`, 233 tests on the real migrations).
 
 ## AUTH — sign-up / login
 | ID | Status | Where / note |
 |---|---|---|
-| AUTH-01 owner sign-up | ✅† | `/signup`: name, email, company name → email code → password; the account owns the new company (`create_company_for`, 0028). No administrator approval (0037) |
+| AUTH-01 owner sign-up | ✅† | `/signup`: name, email, company name → (email code when verification is on) → password; the account owns the new company (`create_company_for`, 0028) |
 | AUTH-02 password rules + lockout | ✅ | 8+ chars, number, special; 5 failures in 15 min locks; administrator / HR **Unlock now** on the employee's Lifecycle tab (audited) |
-| AUTH-03 passwordless login | ◐ | built, always on; needs SMTP in production |
-| AUTH-04 invitation + activation | ◐ | HR / Payroll and administrators invite; the employee activates with an email code and sets a password. No self-registration (0028) and no approval (0037). Email needs SMTP |
+| AUTH-03 passwordless login | ◐ | built; needs SMTP and `EMAIL_VERIFICATION=on` |
+| AUTH-04 invitation + activation | ◐ | HR / Payroll and administrators invite (`employees.account`); employees no longer self-register (0028). Email needs SMTP |
 | AUTH-05 forgot password | ◐ | other sessions signed out; needs SMTP |
 | AUTH-06/07 OTP storage + limits | ✅† | hashed, 10 min, single use, 5 attempts, 60 s cooldown, 5/hour per email and IP |
 | AUTH-08 Nodemailer over SMTP | ◐ | built. **OI-05 decided 27 Oct 2026: Brevo** (transactional SMTP). D-03 open: a sending domain with SPF + DKIM is still needed before live; until then a verified single sender is used for testing (`pnpm email:test`) |

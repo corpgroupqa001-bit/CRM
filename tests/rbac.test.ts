@@ -402,14 +402,6 @@ describe("Companies (AUTH-01, COM-01): owners create their companies; employees 
     await expect(as("sa", `select sa_create_company('Ghost', 'nobody@corp.in')`)).rejects.toThrow(/No account/);
   });
 
-  it("there is no sign-up approval (AUTH-01, AUTH-04): approving or rejecting is refused for everyone", async () => {
-    const fake = "00000000-0000-0000-0000-000000000001";
-    for (const who of ["owner", "admin"]) {
-      await expect(as(who, `select approve_join_request($1, 'employee')`, [fake])).rejects.toThrow(/not used/);
-      await expect(as(who, `select reject_join_request($1, 'no')`, [fake])).rejects.toThrow(/not used/);
-    }
-  });
-
   it("employees don't self-register: new join requests are refused", async () => {
     U.cand = await createUser(db, "cand@corp.in");
     const [d] = await sys<{ id: string; department_id: string | null }>(`select id, department_id from designations where company_id = $1 limit 1`, [cid]);
