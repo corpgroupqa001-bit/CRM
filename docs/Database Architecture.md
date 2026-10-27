@@ -95,6 +95,7 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0034 | `selfies_hr_manager_only` | Selfie files readable only by HR / Payroll and the employee's reporting manager (ATT-25); shown on the employee's attendance page |
 | 0035 | `selfie_flags` | Decision of 27 Oct 2026 (beyond BRD v2.0): `selfie_flags`; `flag_selfie` (HR / Payroll or the reporting manager, reason + note), `explain_selfie_flag` (the employee), `close_selfie_flag` (accept or uphold). Notifications and audit at each step; no effect on attendance or pay by itself |
 | 0036 | `add_existing_person` | Decision of 27 Oct 2026 (builds on EMP-10, AUTH-11): `people_from_my_companies` (people of my other companies where I'm Owner / Company Admin) and `add_existing_person` (add and keep, or move out of chosen / all companies the day before); copies name, email and phone only (BRD §7.2); a former record here is reactivated |
+| 0037 | `custom_roles` | BRD §5.2: `company_roles` + `company_role_permissions` (a company's own roles, copied from Company Admin / HR / Manager / Employee); `company_members.custom_role_id`; `has_perm` / `my_access` use the ticked list for people on a custom role (their `role` stays the copied-from role for role-name rules); `clone_role`, `save_role`, `delete_role` (refused while held), `assignable_permissions`; new permission `roles.manage` (Owner, Company Admin); Job-tab role change ends a custom role; support access and cross-company moves also need the permission |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >
@@ -415,7 +416,7 @@ All are `stable security definer` (they read membership without hitting RLS them
 | `has_role(cid, roles[])` | The user is an active member with one of the roles |
 | `my_role(cid)` | (returns the role text) |
 | `is_hr(cid)` | Role is owner, company_admin or hr (legacy; 0018 policies use `has_perm`) |
-| `has_perm(cid, perm)` | The user is a member in good standing whose role has `perm` in `role_permissions` (0018) |
+| `has_perm(cid, perm)` | The user is a member in good standing whose role has `perm` in `role_permissions` (0018), or, on a custom role, whose role has it ticked in `company_role_permissions` (0037) |
 | `in_good_standing(cid)` | The user's employee record (if any) is not inactive or exited (0018) |
 | `my_access(cid)` | `{allowed, reason, role, permissions[]}` for the signed-in user, loaded by the app on every request (0018) |
 | `is_super_admin()` | The user has a row in `platform_admins` (0018) |

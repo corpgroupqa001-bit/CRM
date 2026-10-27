@@ -3,14 +3,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Badge, Card, Field, PageHeader, Table, Tabs } from "@/components/ui";
 import { fmtDate, fmtDateTime, label } from "@/lib/format";
-import { ASSIGNABLE_ROLES, ROLE_LABEL, type Role } from "@/lib/rbac";
-import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, setMemberRole } from "./actions";
+import { ASSIGNABLE_ROLES, PERMISSION_GROUPS, ROLE_LABEL, type Role } from "@/lib/rbac";
+import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, setMemberRole, cloneRole, saveRole, deleteRole } from "./actions";
 
 export const metadata = { title: "Settings" };
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export default async function Settings({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: Promise<{ tab?: string }> }) {
+export default async function Settings({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: Promise<{ tab?: string; role?: string }> }) {
   const { cid } = await params;
   const sp = await searchParams;
   const ctx = await getCtx(cid);
@@ -28,6 +28,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
     { key: "calendar", label: "Holidays", href: `${base}?tab=calendar`, perm: "settings.read" },
     { key: "policies", label: "Policies", href: `${base}?tab=policies`, perm: "settings.read" },
     { key: "members", label: "Users & roles", href: `${base}?tab=members`, perm: "employees.assign_role" },
+    { key: "roles", label: "Roles", href: `${base}?tab=roles`, perm: "roles.manage" },
     { key: "chat", label: "Chat", href: `${base}?tab=chat`, perm: "settings.manage" },
     { key: "reports", label: "Scheduled reports", href: `${base}?tab=reports`, perm: "settings.manage" },
     { key: "privacy", label: "Privacy requests", href: `${base}?tab=privacy`, perm: "settings.manage" },
@@ -372,7 +373,11 @@ export default async function Settings({ params, searchParams }: { params: Promi
   }
 
   if (tab === "members") {
-    const { data: members } = await supabase.from("company_members").select("id, user_id, role, active, created_at").eq("company_id", cid);
+    const [{ data: members }, { data: customRoles }] = await Promise.all([
+      supabase.from("company_members").select("id, user_id, role, custom_role_id, active, created_at").eq("company_id", cid),
+      supabase.from("company_roles").select("id, name").eq("company_id", cid).order("name"),
+    ]);
+    const customName = new Map((customRoles ?? []).map((r) => [r.id, r.name]));
     const { data: dir } = await supabase.from("employee_directory").select("user_id, full_name, email").eq("company_id", cid);
     const byUser = new Map((dir ?? []).map((d) => [d.user_id, d]));
     body = (
@@ -384,11 +389,12 @@ export default async function Settings({ params, searchParams }: { params: Promi
               <tr key={m.id}>
                 <td className="td"><div className="font-medium">{d?.full_name ?? "—"}</div><div className="text-xs text-slate-500">{d?.email}</div></td>
                 <td className="td" colSpan={3}>
-                  {m.role === "owner" || !admin ? <span className="flex gap-3">{ROLE_LABEL[m.role as Role]} <Badge value={m.active ? "active" : "inactive"} /></span> : (
+                  {m.role === "owner" || !admin ? <span className="flex gap-3">{customName.get(m.custom_role_id) ?? ROLE_LABEL[m.role as Role]} <Badge value={m.active ? "active" : "inactive"} /></span> : (
                     <ActionForm action={setMemberRole.bind(null, cid)} className="flex flex-wrap items-center gap-2">
                       <input type="hidden" name="id" value={m.id} />
-                      <select name="role" defaultValue={m.role} className="input w-44">
-                        {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                      <select name="role" defaultValue={m.custom_role_id ? `custom:${m.custom_role_id}` : m.role} className="input w-52">
+                        <optgroup label="Default roles">{ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</optgroup>
+                        {!!customRoles?.length && <optgroup label="Custom roles">{customRoles.map((r) => <option key={r.id} value={`custom:${r.id}`}>{r.name}</option>)}</optgroup>}
                       </select>
                       <select name="active" defaultValue={String(m.active)} className="input w-32"><option value="true">Active</option><option value="false">Disabled</option></select>
                       <SubmitButton className="btn-secondary">Update</SubmitButton>
@@ -401,6 +407,83 @@ export default async function Settings({ params, searchParams }: { params: Promi
         </Table>
         <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">New users join by invitation from the employee record (Employees → open employee → Send invite).</p>
       </Card>
+    );
+  }
+
+  if (tab === "roles") {
+    // BRD §5.2: copy a default role into a custom role and tick its module permissions
+    const [{ data: customRoles }, { data: defaults }, { data: held }] = await Promise.all([
+      supabase.from("company_roles").select("id, name, base_role, company_role_permissions(permission)").eq("company_id", cid).order("name"),
+      supabase.from("role_permissions").select("role, permission"),
+      supabase.from("company_members").select("custom_role_id").eq("company_id", cid).not("custom_role_id", "is", null),
+    ]);
+    const defaultPerms = (r: string) => new Set((defaults ?? []).filter((d) => d.role === r).map((d) => d.permission));
+    const people = (id: string) => (held ?? []).filter((h) => h.custom_role_id === id).length;
+    const selected = sp.role?.startsWith("default:") ? { id: null, name: ROLE_LABEL[sp.role.slice(8) as Role], base: sp.role.slice(8), perms: defaultPerms(sp.role.slice(8)) }
+      : (customRoles ?? []).filter((r) => r.id === sp.role).map((r) => ({ id: r.id, name: r.name, base: r.base_role, perms: new Set(r.company_role_permissions.map((p) => p.permission)) }))[0];
+    const basePerms = selected ? defaultPerms(selected.base) : new Set<string>();
+    body = (
+      <div className="space-y-6">
+        <Card title="Create a custom role" description="Start from a copy of an existing role, then tick or untick what it can do. The default roles never change.">
+          <ActionForm action={cloneRole.bind(null, cid)} className="grid gap-4 md:grid-cols-3">
+            <Field label="Copy from"><select className="input" name="from" required defaultValue="hr">
+              <optgroup label="Default roles">{ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</optgroup>
+              {!!customRoles?.length && <optgroup label="Custom roles">{customRoles.map((r) => <option key={r.id} value={`custom:${r.id}`}>{r.name}</option>)}</optgroup>}
+            </select></Field>
+            <Field label="New role name"><input className="input" name="name" required minLength={2} maxLength={60} placeholder="e.g. Security Supervisor" /></Field>
+            <div className="flex items-end"><SubmitButton pendingText="Creating…">Create role</SubmitButton></div>
+          </ActionForm>
+        </Card>
+        <Card title="Roles" pad={false}>
+          <Table head={["Role", "Type", "Copied from", "Permissions", "People", ""]}>
+            {ASSIGNABLE_ROLES.map((r) => (
+              <tr key={r}><td className="td font-medium">{ROLE_LABEL[r]}</td><td className="td"><Badge value="inactive" text="Default" /></td><td className="td">—</td>
+                <td className="td">{defaultPerms(r).size}</td><td className="td text-slate-500">—</td>
+                <td className="td text-right"><a className="btn-secondary btn-sm" href={`${base}?tab=roles&role=default:${r}`}>View</a></td></tr>
+            ))}
+            {(customRoles ?? []).map((r) => (
+              <tr key={r.id}><td className="td font-medium">{r.name}</td><td className="td"><Badge value="active" text="Custom" /></td><td className="td">{ROLE_LABEL[r.base_role as Role]}</td>
+                <td className="td">{r.company_role_permissions.length}</td><td className="td">{people(r.id)}</td>
+                <td className="td text-right"><a className="btn-secondary btn-sm" href={`${base}?tab=roles&role=${r.id}`}>Edit</a></td></tr>
+            ))}
+          </Table>
+          <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">Give someone a custom role under <b>Users &amp; roles</b>. The Owner role can&apos;t be copied or changed.</p>
+        </Card>
+        {selected && (
+          <Card title={selected.id ? `Edit: ${selected.name}` : `${selected.name} (default role, view only)`}
+            description={selected.id ? `Copied from ${ROLE_LABEL[selected.base as Role]}. "Added" and "removed" compare it with that role.` : "Default roles can't be changed. Copy one above to make your own version."}>
+            <ActionForm action={selected.id ? saveRole.bind(null, cid, selected.id) : cloneRole.bind(null, cid)} className="space-y-5">
+              <fieldset disabled={!selected.id} className="space-y-5">
+                {selected.id && <Field label="Role name"><input className="input max-w-sm" name="name" defaultValue={selected.name} required minLength={2} maxLength={60} /></Field>}
+                <div className="grid gap-4 md:grid-cols-2">
+                  {PERMISSION_GROUPS.map((g) => (
+                    <fieldset key={g.module} className="rounded-xl border border-slate-200 p-3">
+                      <legend className="label px-1">{g.module}</legend>
+                      {g.perms.map(([p, text]) => {
+                        const on = selected.perms.has(p);
+                        const diff = selected.id && on !== basePerms.has(p) ? (on ? "added" : "removed") : null;
+                        return (
+                          <label key={p} className="flex items-center gap-2 py-1 text-sm text-slate-700">
+                            <input type="checkbox" name="perm" value={p} defaultChecked={on} /> {text}
+                            {diff && <span className={`ml-auto text-xs font-medium ${diff === "added" ? "text-emerald-600" : "text-amber-600"}`}>{diff}</span>}
+                          </label>
+                        );
+                      })}
+                    </fieldset>
+                  ))}
+                </div>
+              </fieldset>
+              {selected.id && <SubmitButton pendingText="Saving…">Save role</SubmitButton>}
+            </ActionForm>
+            {selected.id && (
+              <ActionForm action={deleteRole.bind(null, cid, selected.id)} className="mt-4 border-t border-slate-100 pt-4">
+                <SubmitButton className="btn-ghost text-danger" pendingText="Deleting…">Delete this role</SubmitButton>
+                <span className="ml-2 text-xs text-slate-500">Only when nobody has it.</span>
+              </ActionForm>
+            )}
+          </Card>
+        )}
+      </div>
     );
   }
 

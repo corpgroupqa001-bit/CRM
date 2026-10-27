@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { assertPerm, getCtx } from "@/lib/context";
 import { ASSIGNABLE_ROLES, type Role } from "@/lib/rbac";
 import { attempt, bool, must, numOrNull, str, type ActionState } from "@/lib/actions";
@@ -160,10 +161,49 @@ export async function setMemberRole(cid: string, _: ActionState, fd: FormData): 
     assertPerm(ctx, "employees.assign_role");
     const { supabase } = ctx;
     const id = str(fd, "id");
-    const role = str(fd, "role");
-    if (!ASSIGNABLE_ROLES.includes(role as Role)) throw new Error("Choose a valid role.");
-    must(await supabase.from("company_members").update({ role, active: fd.get("active") !== "false" }).eq("id", id!).eq("company_id", cid));
+    const role = str(fd, "role") ?? "";
+    const active = fd.get("active") !== "false";
+    // "custom:<id>" is one of the company's custom roles (§5.2): the database sets the base role from it
+    if (role.startsWith("custom:")) {
+      must(await supabase.from("company_members").update({ custom_role_id: role.slice(7), active }).eq("id", id!).eq("company_id", cid));
+    } else {
+      if (!ASSIGNABLE_ROLES.includes(role as Role)) throw new Error("Choose a valid role.");
+      must(await supabase.from("company_members").update({ role, custom_role_id: null, active }).eq("id", id!).eq("company_id", cid));
+    }
     return done(cid, "Member updated.");
+  });
+}
+
+// BRD §5.2 custom roles: copy a default (or custom) role, then tick its permissions
+export async function cloneRole(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "roles.manage");
+    const from = str(fd, "from") ?? "";
+    const custom = from.startsWith("custom:") ? from.slice(7) : null;
+    const data = must(await ctx.supabase.rpc("clone_role", {
+      p_company: cid, p_name: str(fd, "name"), p_from_role: custom ? null : from, p_from_custom: custom }));
+    revalidatePath(`/c/${cid}/settings`);
+    redirect(`/c/${cid}/settings?tab=roles&role=${data}`);
+  });
+}
+
+export async function saveRole(cid: string, roleId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "roles.manage");
+    must(await ctx.supabase.rpc("save_role", { p_role: roleId, p_name: str(fd, "name"), p_permissions: fd.getAll("perm").map(String) }));
+    return done(cid, "Role saved. People on this role get the new permissions on their next page load.");
+  });
+}
+
+export async function deleteRole(cid: string, roleId: string, _: ActionState, __: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "roles.manage");
+    must(await ctx.supabase.rpc("delete_role", { p_role: roleId }));
+    revalidatePath(`/c/${cid}/settings`);
+    redirect(`/c/${cid}/settings?tab=roles`);
   });
 }
 

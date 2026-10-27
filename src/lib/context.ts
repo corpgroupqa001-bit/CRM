@@ -33,7 +33,7 @@ const COMPANY_COLUMNS = "id, name, legal_name, logo_url, address, state, gstin, 
   "fy_start_month, renewal_date, employee_limit, payslip_password, chat_cross_dept, chat_retention_days";
 
 /** The current user's membership, company and employee record for a company route. */
-type Access = { allowed: boolean; reason?: string; role?: Role; permissions?: string[] };
+type Access = { allowed: boolean; reason?: string; role?: Role; custom_role?: string; permissions?: string[] };
 
 /**
  * The current user's company, role, permissions and employee record for a company route.
@@ -58,7 +58,7 @@ export const getCtx = cache(async (companyId: string) => {
   // a platform super admin acting in a company they don't belong to: the visit itself is audited
   // (their writes are audited by the database)
   if (a.role === "super_admin") await supabase.rpc("sa_log_access", { cid: companyId });
-  return { user, supabase, role: a.role, perms, company: company as unknown as Company, employee, companyId };
+  return { user, supabase, role: a.role, customRole: a.custom_role ?? null, perms, company: company as unknown as Company, employee, companyId };
 });
 
 export type Ctx = Awaited<ReturnType<typeof getCtx>>;
