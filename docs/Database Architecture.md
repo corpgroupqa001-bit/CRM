@@ -1,7 +1,7 @@
 # Database architecture: corpgroup.com
 
 The database is the core of this application. Besides storing data, it **enforces permissions (RLS), integrity rules (triggers) and the attendance and payroll calculations (PL/pgSQL)**.
-This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0030). For the application side, see [`system.md`](./system.md).
+This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0031). For the application side, see [`system.md`](./system.md).
 
 > **The migrations are the source of truth.** If this document and a migration disagree, the migration wins. Please update this file in the same PR.
 
@@ -89,6 +89,7 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0028 | `owner_signup` | `create_company_for(user, name)` (service role) and `create_company(name)`: owner sign-up and owners adding companies; `submit_join_request` now refuses (employees are invited) |
 | 0029 | `missed_out_and_retention` | `companies.missed_out_grace_hours` (default 2) used by `compute_attendance_day` for ATT-36 with a one-time "Missed check-out" notification; `companies.selfie_retention_days` (default 90); `retention_storage_due()` lists selfies and purged-company documents for the daily `/api/cron/retention` job |
 | 0030 | `work_from_home` | `employees.wfh_eligible`, `companies.wfh_capture_gps`; tables `wfh_days`, `work_sessions`, `work_breaks` (read via RLS, written only by functions); `request_wfh`, `decide_wfh`, `cancel_wfh`, `assign_wfh`, `wfh_check_in`, `wfh_break`, `wfh_check_out`, `wfh_status`, `wfh_live`, `wfh_auto_close` (from `attendance_tick`); `compute_attendance_day` derives WFH day status from worked hours |
+| 0031 | `sync_system_role` | Keeps `employees.invite_role` (Job tab) and `company_members.role` (Users & roles) in step in both directions (never the owner); repairs a role set on the Job tab that never reached the person's access |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

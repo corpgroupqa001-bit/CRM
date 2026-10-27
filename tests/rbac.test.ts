@@ -134,6 +134,17 @@ describe("Employees row: Owner, Company Admin, HR CRUD · Manager R (team) · Em
     expect(await count("admin", `update company_members set active = false where user_id = $1 returning id`, [U.admin])).toBe(0);
   });
 
+  it("a system role changed on the Job tab or in Users & roles takes effect, and both stay in step (0031)", async () => {
+    await as("admin", `update employees set invite_role = 'manager' where id = $1`, [E.emp2]);          // Job tab
+    expect((await perms("emp2")).role).toBe("manager");
+    await as("admin", `update company_members set role = 'hr' where user_id = $1 and company_id = $2`, [U.emp2, cid]);   // Users & roles
+    expect(await sys(`select invite_role from employees where id = $1`, [E.emp2])).toEqual([{ invite_role: "hr" }]);
+    await as("admin", `update employees set invite_role = 'employee' where id = $1`, [E.emp2]);
+    expect((await perms("emp2")).role).toBe("employee");
+    await expect(as("hr", `update employees set invite_role = 'manager' where id = $1`, [E.emp2])).rejects.toThrow(/Only an administrator/);
+    expect((await perms("owner")).role).toBe("owner");                                                 // the owner is never changed
+  });
+
   it("Manager reads their team; Employee reads only their own record", async () => {
     expect((await as<{ id: string }>("manager", `select id from employees`)).map((r) => r.id).sort()).toEqual([E.manager, E.emp].sort());
     expect((await as<{ id: string }>("emp", `select id from employees`)).map((r) => r.id)).toEqual([E.emp]);
