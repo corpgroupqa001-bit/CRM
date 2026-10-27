@@ -3,7 +3,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
-import { asOwnerUser, createDb, createUser } from "./db";
+import { addMember, asOwnerUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 
@@ -48,11 +48,12 @@ beforeAll(async () => {
   const owner = await createUser(db, "owner@acme.in");
   const [{ id: cid }] = (await asOwnerUser(db, owner, () => db.query<{ id: string }>(
     `insert into companies (owner_id, name) values ($1, 'Acme') returning id`, [owner]))).rows;
-  emp = (await asOwnerUser(db, owner, () => db.query<{ id: string }>(
+  const admin = await addMember(db, cid, "admin@acme.in", "company_admin");   // devices: Company Admin
+  emp = (await asOwnerUser(db, admin, () => db.query<{ id: string }>(
     `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'Ravi', 'ravi@acme.in', '2025-01-01') returning id`, [cid]))).rows[0].id;
-  device = (await asOwnerUser(db, owner, () => db.query<{ r: typeof device }>(
+  device = (await asOwnerUser(db, admin, () => db.query<{ r: typeof device }>(
     `select register_device($1, null, 'Gate', $2, 'ZKTeco', 'K40', null, 'push') as r`, [cid, SERIAL]))).rows[0].r;
-  await asOwnerUser(db, owner, () => db.query(`select map_device_user($1, '17', $2)`, [device.device_id, emp]));
+  await asOwnerUser(db, admin, () => db.query(`select map_device_user($1, '17', $2)`, [device.device_id, emp]));
 });
 
 describe("POST /api/attendance/punch", () => {

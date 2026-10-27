@@ -1,10 +1,11 @@
 // Migration 0011: the remaining BRD features, exercised against the real SQL.
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { asOwnerUser, asUser, createDb, createUser } from "./db";
+import { addMember, asOwnerUser, asUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 let owner: string, staff: string, other: string;
+let admin: string, hr: string;
 let cid: string, empOwner: string, empStaff: string, empOther: string;
 
 const sys = async <T = Record<string, unknown>>(uid: string, sql: string, p: unknown[] = []) =>
@@ -26,6 +27,8 @@ beforeAll(async () => {
   empStaff = await mk("staff", staff, d1.id);
   empOther = await mk("other", other, d2.id);
   await sys(owner, `insert into company_members (company_id, user_id, role) values ($1, $2, 'employee'), ($1, $3, 'employee')`, [cid, staff, other]);
+  admin = await addMember(db, cid, "admin@x.in", "company_admin");   // BRD §5.3: settings, chat controls, attendance
+  hr = await addMember(db, cid, "hr@x.in", "hr");                     // BRD §5.3: leave and payroll preparation
 });
 
 describe("tasks", () => {
@@ -78,7 +81,7 @@ describe("chat", () => {
   it("COMMS-12: cross-department DMs can be switched off; HR is exempt", async () => {
     await sys(owner, `update companies set chat_cross_dept = false where id = $1`, [cid]);
     await expect(as(staff, `select open_dm($1, $2)`, [cid, other])).rejects.toThrow(/across departments/);
-    await as(owner, `select open_dm($1, $2)`, [cid, other]);   // owner is HR-level
+    await as(hr, `select open_dm($1, $2)`, [cid, other]);   // HR / Payroll is exempt
     await sys(owner, `update companies set chat_cross_dept = true where id = $1`, [cid]);
   });
 
@@ -98,7 +101,8 @@ describe("chat", () => {
   it("COMMS-12: only the owner / admin can export a conversation, and it is logged", async () => {
     const [{ open_dm: conv }] = await as<{ open_dm: string }>(staff, `select open_dm($1, $2)`, [cid, other]);
     await expect(as(staff, `select * from export_conversation($1)`, [conv])).rejects.toThrow(/not allowed/);
-    const rows = await as(owner, `select * from export_conversation($1)`, [conv]);
+    await expect(as(owner, `select * from export_conversation($1)`, [conv])).rejects.toThrow(/not allowed/);   // Owner: Settings R
+    const rows = await as(admin, `select * from export_conversation($1)`, [conv]);
     expect(rows.length).toBeGreaterThan(0);
     expect(await sys(owner, `select * from audit_log where action = 'export'`)).toHaveLength(1);
   });
@@ -109,17 +113,17 @@ describe("leave and payroll", () => {
     const [el] = await sys<{ id: string }>(owner, `select id from leave_types where company_id = $1 and code = 'EL'`, [cid]);
     const y = new Date().getFullYear();
     await sys(owner, `update leave_types set accrual = 'yearly', annual_quota = 40, carry_forward_max = 30 where id = $1`, [el.id]);
-    await as(owner, `select carry_forward_leaves($1, $2)`, [cid, y]);
+    await as(hr, `select carry_forward_leaves($1, $2)`, [cid, y]);
     const [b] = await sys<{ opening: string }>(owner, `select opening from leave_balances where employee_id = $1 and leave_type_id = $2 and year = $3`, [empStaff, el.id, y + 1]);
     expect(Number(b.opening)).toBe(30);
     await expect(as(staff, `select carry_forward_leaves($1, $2)`, [cid, y])).rejects.toThrow(/not allowed/);
   });
 
   it("SAL-04: Salaries records an employee's declaration and totals are computed; employees have no access", async () => {
-    const [d] = await as<{ declared_total: string; id: string }>(owner, `insert into tax_declarations (company_id, employee_id, fy_start_year, regime, items)
+    const [d] = await as<{ declared_total: string; id: string }>(hr, `insert into tax_declarations (company_id, employee_id, fy_start_year, regime, items)
       values ($1, $2, 2026, 'old', '{"80C": 150000, "80D": 25000}') returning id, declared_total`, [cid, empStaff]);
     expect(Number(d.declared_total)).toBe(175000);
-    await as(owner, `update tax_declarations set verified = true where id = $1`, [d.id]);
+    await as(hr, `update tax_declarations set verified = true where id = $1`, [d.id]);
     expect(await as(staff, `select * from tax_declarations`)).toHaveLength(0);
     const upd = await as(staff, `update tax_declarations set items = '{"80C": 1}' where id = $1 returning id`, [d.id]);
     expect(upd).toHaveLength(0);

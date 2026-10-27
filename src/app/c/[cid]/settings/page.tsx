@@ -4,7 +4,7 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Badge, Card, Field, PageHeader, Table, Tabs } from "@/components/ui";
 import { fmtDate, fmtDateTime, label } from "@/lib/format";
 import { ASSIGNABLE_ROLES, ROLE_LABEL, type Role } from "@/lib/rbac";
-import { addHoliday, addSchedule, deleteRow, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, setMemberRole } from "./actions";
+import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, setMemberRole } from "./actions";
 
 export const metadata = { title: "Settings" };
 
@@ -14,21 +14,24 @@ export default async function Settings({ params, searchParams }: { params: Promi
   const { cid } = await params;
   const sp = await searchParams;
   const ctx = await getCtx(cid);
-  requirePerm(ctx, "settings.manage", "settings.org");
+  requirePerm(ctx, "settings.read");
   const { supabase, company, perms } = ctx;
   const admin = perms.has("settings.manage");
+  const orgEdit = perms.has("settings.org");
   const base = `/c/${cid}/settings`;
-  // Administrator: everything. HR Manager: departments, designations and holidays, plus the audit log.
+  // BRD §5.3 "Settings and audit log": Company Admin CRUD; Owner and HR / Payroll read. The Owner also edits
+  // the company profile (Companies CRUD).
   const allTabs = [
-    { key: "company", label: "Company", href: `${base}?tab=company`, perm: "settings.manage" },
-    { key: "branches", label: "Branches", href: `${base}?tab=branches`, perm: "settings.manage" },
-    { key: "org", label: "Departments & designations", href: `${base}?tab=org`, perm: "settings.org" },
-    { key: "calendar", label: "Holidays", href: `${base}?tab=calendar`, perm: "settings.org" },
-    { key: "policies", label: "Policies", href: `${base}?tab=policies`, perm: "settings.manage" },
+    { key: "company", label: "Company", href: `${base}?tab=company`, perm: "settings.read" },
+    { key: "branches", label: "Branches", href: `${base}?tab=branches`, perm: "settings.read" },
+    { key: "org", label: "Departments & designations", href: `${base}?tab=org`, perm: "settings.read" },
+    { key: "calendar", label: "Holidays", href: `${base}?tab=calendar`, perm: "settings.read" },
+    { key: "policies", label: "Policies", href: `${base}?tab=policies`, perm: "settings.read" },
     { key: "members", label: "Users & roles", href: `${base}?tab=members`, perm: "employees.assign_role" },
     { key: "chat", label: "Chat", href: `${base}?tab=chat`, perm: "settings.manage" },
     { key: "reports", label: "Scheduled reports", href: `${base}?tab=reports`, perm: "settings.manage" },
     { key: "privacy", label: "Privacy requests", href: `${base}?tab=privacy`, perm: "settings.manage" },
+    { key: "support", label: "Support access", href: `${base}?tab=support`, perm: "settings.manage" },
     { key: "audit", label: "Audit log", href: `${base}?tab=audit`, perm: "audit.read" },
   ] as const;
   const tabs = allTabs.filter((t) => perms.has(t.perm));
@@ -42,7 +45,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
     body = (
       <Card title="Company profile">
         <ActionForm action={saveCompany.bind(null, cid)} className="grid gap-4 md:grid-cols-2">
-          <fieldset disabled={!admin} className="contents">
+          <fieldset disabled={!perms.has("company.update")} className="contents">
             <Field label="Company name"><input className="input" name="name" defaultValue={company.name} required /></Field>
             <Field label="Legal name"><input className="input" name="legal_name" defaultValue={company.legal_name ?? ""} /></Field>
             <Field label="Address" className="md:col-span-2"><textarea className="input" name="address" rows={2} defaultValue={company.address ?? ""} /></Field>
@@ -54,7 +57,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             <Field label="PF registration no."><input className="input" name="pf_reg_no" defaultValue={company.pf_reg_no ?? ""} /></Field>
             <Field label="ESI registration no."><input className="input" name="esi_reg_no" defaultValue={company.esi_reg_no ?? ""} /></Field>
             <Field label="Logo" hint="PNG or JPG, up to 2 MB"><input className="input" name="logo" type="file" accept="image/*" /></Field>
-            {admin && <div className="md:col-span-2"><SubmitButton>Save</SubmitButton></div>}
+            {perms.has("company.update") && <div className="md:col-span-2"><SubmitButton>Save</SubmitButton></div>}
           </fieldset>
         </ActionForm>
       </Card>
@@ -421,11 +424,48 @@ export default async function Settings({ params, searchParams }: { params: Promi
     );
   }
 
+  if (tab === "support") {
+    const { data: grants } = await supabase.from("support_access").select("*").eq("company_id", cid).order("created_at", { ascending: false }).limit(20);
+    const now = Date.now();
+    body = (
+      <div className="space-y-6">
+        <Card title="Platform support access" description="The platform Super Admin can't see this company's employees, attendance or payroll unless you allow it here, for a limited time. Every grant and every change they make is in the audit log.">
+          <ActionForm action={grantSupportAccess.bind(null, cid)} className="grid gap-4 md:grid-cols-4" resetOnSuccess>
+            <Field label="For" className="md:col-span-1"><select className="input" name="hours" defaultValue="4">
+              {[1, 4, 8, 24, 48, 72].map((h) => <option key={h} value={h}>{h} hour{h > 1 ? "s" : ""}</option>)}</select></Field>
+            <Field label="Support case or reason" className="md:col-span-3"><input className="input" name="reason" required placeholder="e.g. Ticket 1042: payslip PDF not opening" /></Field>
+            <div className="md:col-span-4"><SubmitButton>Allow support access</SubmitButton></div>
+          </ActionForm>
+        </Card>
+        <Card title="Recent grants" pad={false}>
+          <Table head={["Granted", "Reason", "Until", "Status", ""]} empty="Support has never been given access.">
+            {(grants ?? []).map((g) => {
+              const live = !g.revoked_at && new Date(g.expires_at).getTime() > now;
+              return (
+                <tr key={g.id}><td className="td whitespace-nowrap">{fmtDateTime(g.created_at)}</td><td className="td">{g.reason}</td>
+                  <td className="td whitespace-nowrap">{fmtDateTime(g.expires_at)}</td>
+                  <td className="td"><Badge value={live ? "active" : "inactive"} text={live ? "Active" : g.revoked_at ? "Revoked" : "Expired"} /></td>
+                  <td className="td text-right">{live && <form action={revokeSupportAccess.bind(null, cid, g.id)}><button className="btn-secondary btn-sm">Revoke now</button></form>}</td></tr>
+              );
+            })}
+          </Table>
+        </Card>
+      </div>
+    );
+  }
+
+  // Departments, designations and holidays: read-only for the Owner and HR / Payroll
+  const readOnly = (tab === "org" || tab === "calendar") && !orgEdit;
   return (
     <>
       <PageHeader title="Settings" subtitle={company.name} />
       <Tabs tabs={tabs} active={tab} />
-      {body}
+      {readOnly ? (
+        <>
+          <p className="mb-4 text-sm text-slate-500">View only. A Company Admin changes these.</p>
+          <fieldset disabled className="contents [&_button]:hidden">{body}</fieldset>
+        </>
+      ) : body}
     </>
   );
 }

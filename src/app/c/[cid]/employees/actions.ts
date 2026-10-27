@@ -48,7 +48,7 @@ export async function createEmployee(cid: string, _: ActionState, fd: FormData):
     const row: Record<string, unknown> = {
       company_id: cid, ...pick(fd, PERSONAL_FIELDS), ...pick(fd, JOB_FIELDS), ...sensitive(fd),
       emp_code: str(fd, "emp_code"), mobile_attendance: bool(fd, "mobile_attendance"),
-      invite_role: can(ctx, "employees.account") ? str(fd, "invite_role") ?? "employee" : "employee",
+      invite_role: can(ctx, "employees.assign_role") ? str(fd, "invite_role") ?? "employee" : "employee",
     };
     if (!row.first_name || !row.email || !row.date_of_joining) throw new Error("First name, email and date of joining are required.");
     row.email = String(row.email).toLowerCase();
@@ -74,7 +74,7 @@ export async function updateEmployee(cid: string, eid: string, section: "persona
       assertPerm(ctx, "employees.update");
       patch = { ...pick(fd, JOB_FIELDS), emp_code: str(fd, "emp_code"), mobile_attendance: bool(fd, "mobile_attendance") };
       // the system role changes only when an administrator submits it
-      if (can(ctx, "employees.account") && fd.has("invite_role")) patch.invite_role = str(fd, "invite_role") ?? "employee";
+      if (can(ctx, "employees.assign_role") && fd.has("invite_role")) patch.invite_role = str(fd, "invite_role") ?? "employee";
     } else if (can(ctx, "employees.update")) {
       patch = pick(fd, PERSONAL_FIELDS);
     } else {
@@ -195,7 +195,7 @@ export async function toggleChecklist(cid: string, eid: string, itemId: string, 
 // AUTH-04 invite: email a link to the activation page
 async function sendInvite(cid: string, eid: string) {
   const ctx = await getCtx(cid);
-  assertPerm(ctx, "employees.account");   // invitations are an administrator action
+  assertPerm(ctx, "employees.account");   // invitations: HR / Payroll and administrators (AUTH-04)
   const { supabase, company } = ctx;
   const e = must(await supabase.from("employees").select("first_name, email, user_id").eq("id", eid).single());
   if (e.user_id) throw new Error("This employee has already activated their account.");

@@ -38,7 +38,7 @@ export default async function Projects({ params, searchParams }: { params: Promi
     return { open: t.length - done, pct: t.length ? Math.round((done / t.length) * 100) : 0 };
   };
   // Administrator: any project; Manager: projects they lead (they become its manager)
-  const canCreate = perms.has("projects.manage_all") || perms.has("projects.create");
+  const canCreate = perms.has("projects.manage_all");
   const leadsOwn = !perms.has("projects.manage_all");
   const exportHref = `/api/export/projects?company=${cid}`;
 

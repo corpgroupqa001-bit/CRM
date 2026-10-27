@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { ADMIN_PATH, cookieOptionsFor, scopedCookieOptions, type SessionScope } from "@/lib/supabase/scopes";
 import { ADMIN_ACTIVITY_COOKIE, adminActivityCookieOptions, adminIdleSeconds, adminSessionExpired, signAdminActivity } from "@/lib/auth/admin-idle";
-import { COMPANY_LOCK_COOKIE, FRESH_SIGN_IN_SECONDS, lastSignInAt, lockCookieOptions, readCompanyLock, signCompanyLock } from "@/lib/auth/company-lock";
+import { COMPANY_LOCK_COOKIE, lockCookieOptions, readCompanyLock, signCompanyLock } from "@/lib/auth/company-lock";
 
-// Session refresh (the @supabase/ssr pattern) plus the company lock: opening a different company than
-// the one this sign-in unlocked asks for the password again (/switch). No database queries here;
+// Session refresh (the @supabase/ssr pattern) plus the company lock, which records the company this
+// session has open (switching needs no new sign-in, AUTH-11). No database queries here;
 // role, company and two-factor checks run in the server layouts / pages / API routes that need them
 // (src/lib/context.ts, src/lib/auth/guard.ts).
 export async function middleware(request: NextRequest) {
@@ -70,21 +70,11 @@ export async function middleware(request: NextRequest) {
   const company = /^\/c\/([0-9a-f-]{36})(?:\/|$)/.exec(path)?.[1];
   const claims = data?.claims;
   if (company && claims?.session_id) {
+    // AUTH-11: switching to another company the user belongs to needs no new sign-in. The lock only
+    // records which company this session has open; membership is checked by the database (my_access)
+    // on every page, so a company the user doesn't belong to still ends on /denied.
     const unlocked = await readCompanyLock(request.cookies.get(COMPANY_LOCK_COOKIE)?.value, claims.session_id);
-    if (unlocked !== company) {
-      const fresh = Date.now() / 1000 - lastSignInAt(claims.amr) < FRESH_SIGN_IN_SECONDS;
-      if (!unlocked && fresh) {
-        // just signed in: the first company opened is unlocked for this session
-        response.cookies.set(COMPANY_LOCK_COOKIE, await signCompanyLock(claims.session_id, company), lockCookieOptions);
-      } else {
-        const url = request.nextUrl.clone();
-        url.pathname = "/switch";
-        url.search = `?${new URLSearchParams({ to: company, next: path })}`;
-        const redirect = NextResponse.redirect(url);
-        response.cookies.getAll().forEach((c) => redirect.cookies.set(c));   // keep a refreshed session
-        return redirect;
-      }
-    }
+    if (unlocked !== company) response.cookies.set(COMPANY_LOCK_COOKIE, await signCompanyLock(claims.session_id, company), lockCookieOptions);
   }
   return response;
 }

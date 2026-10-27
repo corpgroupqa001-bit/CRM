@@ -11,14 +11,15 @@ export default async function NewEmployee({ params }: { params: Promise<{ cid: s
   const ctx = await getCtx(cid);
   requirePerm(ctx, "employees.create");
   const o = await jobOptions(ctx);
-  const canAccount = ctx.perms.has("employees.account");   // invitation, login, system role
+  const canAccount = ctx.perms.has("employees.account");   // invitation (HR / Payroll, administrators)
+  const canSetRole = ctx.perms.has("employees.assign_role");   // system role (Owner, Company Admin)
   const canSalary = ctx.perms.has("salaries.manage");
   return (
     <>
       <PageHeader title="Add employee" subtitle="The employee record feeds attendance, payroll, tasks and chat — complete it before the first payroll." />
       <ActionForm action={createEmployee.bind(null, cid)} className="space-y-6">
         <Card title="Personal details"><div className="grid gap-4 md:grid-cols-2"><PersonalFields /></div></Card>
-        <Card title="Job details"><div className="grid gap-4 md:grid-cols-3"><JobFields o={o} canSetRole={canAccount} /></div></Card>
+        <Card title="Job details"><div className="grid gap-4 md:grid-cols-3"><JobFields o={o} canSetRole={canSetRole} /></div></Card>
         {/* the starting salary is set by whoever manages salaries (Administrator, Finance / Payroll) */}
         {canSalary && <Card title="Salary">
           <div className="grid gap-4 md:grid-cols-3">
@@ -32,7 +33,7 @@ export default async function NewEmployee({ params }: { params: Promise<{ cid: s
           <SubmitButton>Create employee</SubmitButton>
           {canAccount
             ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="send_invite" defaultChecked /> Email an invitation to activate their account</label>
-            : <span className="text-sm text-slate-500">An administrator sends the invitation and sets their access.</span>}
+            : <span className="text-sm text-slate-500">HR or an administrator sends the invitation.</span>}
         </div>
       </ActionForm>
     </>

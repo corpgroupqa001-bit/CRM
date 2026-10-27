@@ -37,8 +37,8 @@ type PayslipEmployee = {
 
 /**
  * A payslip with its lines, company and employee details, read with the caller's own rights (RLS).
- * Salaries roles only (RLS on payslips). Employee details come from the pay-related view, since
- * Finance cannot read the employees table.
+ * Salaries roles, or the employee for their own approved payslip (RLS on payslips). Employee details
+ * come from the pay-related view, or from the employee's own record.
  */
 export async function loadPayslip(db: SupabaseClient, slipId: string) {
   const { data: slip, error } = await db.from("payslips")
@@ -51,7 +51,9 @@ export async function loadPayslip(db: SupabaseClient, slipId: string) {
     db.from("employee_pay_fields").select(cols).eq("id", slip.employee_id).maybeSingle(),
     db.from("employee_directory").select("department, designation").eq("id", slip.employee_id).maybeSingle(),
   ]);
-  const base = pay as Omit<PayslipEmployee, "departments" | "designations"> | null;
+  // an employee reading their own payslip (SAL-12) has no pay-fields view; their own record has the same columns
+  const own = pay ? null : (await db.from("employees").select(cols).eq("id", slip.employee_id).maybeSingle()).data;
+  const base = (pay ?? own) as Omit<PayslipEmployee, "departments" | "designations"> | null;
   const employees: PayslipEmployee = {
     ...(base ?? { first_name: "", last_name: null, emp_code: "", email: null, pan_last4: null, uan: null, bank_last4: null, ifsc: null, date_of_joining: null }),
     departments: dir?.department ? { name: dir.department } : null,

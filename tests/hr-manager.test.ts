@@ -1,5 +1,5 @@
 // HR Manager against the approved BRD matrix: attendance corrections need a reason and are audited
-// (0025); salaries and tasks are view-only; leave stays off; everything is per company.
+// (0025); per BRD v2.0 §5.3 HR / Payroll prepares payroll and manages tasks and leave; everything is per company.
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import { asUser, createDb, createUser } from "./db";
@@ -74,14 +74,12 @@ describe("attendance corrections (0025)", () => {
   });
 });
 
-describe("HR Manager matrix", () => {
-  it("salaries are view-only: HR reads, can't create structures or salaries", async () => {
-    expect((await as("hr", `select id from salary_structures where company_id = $1`, [cid])).length).toBeGreaterThan(0);
-    await expect(as("hr", `insert into salary_structures (company_id, name) values ($1, 'Mine')`, [cid])).rejects.toThrow(/row-level security/);
+describe("HR / Payroll against BRD v2.0 §5.3", () => {
+  it("prepares payroll: creates salary structures and CTC (Salaries CRUD, prepare)", async () => {
+    await as("hr", `insert into salary_structures (company_id, name) values ($1, 'HR made')`, [cid]);
     const [s] = await sys<{ id: string }>(`select id from salary_structures where company_id = $1 limit 1`, [cid]);
-    await expect(as("hr", `insert into employee_ctc (company_id, employee_id, structure_id, annual_ctc, effective_from) values ($1, $2, $3, 600000, '2026-10-01')`, [cid, emp, s.id]))
-      .rejects.toThrow(/row-level security/);
-    await expect(as("hr", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed|permission|Lock attendance/);
+    await as("hr", `insert into employee_ctc (company_id, employee_id, structure_id, annual_ctc, effective_from) values ($1, $2, $3, 600000, '2026-10-01')`, [cid, emp, s.id]);
+    await expect(as("hr", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/Lock attendance/);   // allowed; attendance isn't locked
   });
 
   it("employees can't see salaries at all", async () => {
@@ -89,16 +87,15 @@ describe("HR Manager matrix", () => {
     expect(await as("emp", `select id from employee_ctc where company_id = $1`, [cid])).toHaveLength(0);
   });
 
-  it("tasks are view-only for HR: no creating tasks", async () => {
-    await expect(as("hr", `insert into tasks (company_id, title, created_by) values ($1, 'Do it', $2)`, [cid, U.hr])).rejects.toThrow(/row-level security/);
-    await sys(`insert into tasks (company_id, title, created_by) values ($1, 'Owner task', $2)`, [cid, U.owner]);
-    expect((await as("hr", `select title from tasks where company_id = $1`, [cid])).map((r) => r.title)).toContain("Owner task");
+  it("creates and manages tasks (Tasks CRUD)", async () => {
+    const [{ id }] = await as<{ id: string }>("hr", `insert into tasks (company_id, title, created_by) values ($1, 'Collect documents', $2) returning id`, [cid, U.hr]);
+    expect((await as<{ id: string }>("hr", `update tasks set priority = 'high' where id = $1 returning id`, [id]))).toHaveLength(1);
   });
 
-  it("leave stays off in Phase 1, also for HR", async () => {
+  it("manages leave (Leave CRUD)", async () => {
     const [lt] = await sys<{ id: string }>(`select id from leave_types where company_id = $1 limit 1`, [cid]);
-    await expect(as("hr", `insert into leave_requests (company_id, employee_id, leave_type_id, from_date, to_date) values ($1, $2, $3, '2026-11-02', '2026-11-02')`, [cid, emp, lt.id]))
-      .rejects.toThrow();
+    await as("hr", `insert into leave_requests (company_id, employee_id, leave_type_id, from_date, to_date) values ($1, $2, $3, '2026-11-02', '2026-11-02')`, [cid, emp, lt.id]);
+    expect(await as("hr", `select id from leave_requests where employee_id = $1`, [emp])).toHaveLength(1);
   });
 
   it("HR rights in one company give nothing in another", async () => {

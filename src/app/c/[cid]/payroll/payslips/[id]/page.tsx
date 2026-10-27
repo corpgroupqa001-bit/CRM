@@ -1,17 +1,16 @@
 import { notFound } from "next/navigation";
-import { getCtx, requirePerm } from "@/lib/context";
+import { getCtx } from "@/lib/context";
 import { loadPayslip } from "@/lib/payslip-pdf";
 import { Card, PageHeader, Table } from "@/components/ui";
 import { fmtMonth, money, money2, num, rupeesInWords } from "@/lib/format";
 
 export const metadata = { title: "Payslip" };
 
-// SAL-20: the payslip shows how it was calculated. Salaries module only (employees have no payslip
-// access until that is approved).
+// SAL-20: the payslip shows how it was calculated. Salaries roles see every payslip; an employee or
+// manager sees only their own approved ones (SAL-12). RLS decides; anything else is "not found".
 export default async function PayslipView({ params }: { params: Promise<{ cid: string; id: string }> }) {
   const { cid, id } = await params;
   const ctx = await getCtx(cid);
-  requirePerm(ctx, "salaries.read");
   const { supabase } = ctx;
   const data = await loadPayslip(supabase, id);
   if (!data) notFound();

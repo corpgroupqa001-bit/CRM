@@ -1,5 +1,6 @@
-// Role-based access control (migrations 0018 + 0019) — the acceptance criteria, against the real RLS policies.
-// Every query runs as the `authenticated` role with the user's id, so RLS applies exactly as in production.
+// Role-based access control against BRD v2.0 §5.3 (default permission matrix), migrations 0018, 0019 and 0027,
+// checked against the real RLS policies. Every query runs as the `authenticated` role with the user's id,
+// so RLS applies exactly as in production.
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import { asUser, createDb, createUser } from "./db";
@@ -13,13 +14,15 @@ const as = async <T = Record<string, unknown>>(who: string, sql: string, p: unkn
   asUser(db, U[who], async () => (await db.query<T>(sql, p)).rows);
 const sys = async <T = Record<string, unknown>>(sql: string, p: unknown[] = []) => (await db.query<T>(sql, p)).rows;
 const count = async (who: string, sql: string, p: unknown[] = []) => (await as(who, sql, p)).length;
+const perms = async (who: string, c = cid) =>
+  (await as<{ a: { allowed: boolean; role: string; permissions: string[] } }>(who, `select my_access($1) a`, [c]))[0].a;
 
 beforeAll(async () => {
   db = await createDb();
-  for (const who of ["owner", "admin", "hr", "finance", "manager", "emp", "emp2", "ownerB", "sa", "outsider"]) U[who] = await createUser(db, `${who}@corp.in`);
+  for (const who of ["owner", "admin", "hr", "manager", "emp", "emp2", "ownerB", "sa", "outsider"]) U[who] = await createUser(db, `${who}@corp.in`);
   [{ id: cid }] = (await db.query<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Acme') returning id`, [U.owner])).rows;
   [{ id: cidB }] = (await db.query<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Other') returning id`, [U.ownerB])).rows;
-  const roles: [string, string][] = [["admin", "company_admin"], ["hr", "hr"], ["finance", "finance"], ["manager", "manager"], ["emp", "employee"], ["emp2", "employee"]];
+  const roles: [string, string][] = [["admin", "company_admin"], ["hr", "hr"], ["manager", "manager"], ["emp", "employee"], ["emp2", "employee"]];
   for (const who of ["owner", ...roles.map((r) => r[0])]) {
     [{ id: E[who] }] = await sys<{ id: string }>(`insert into employees (company_id, first_name, email, date_of_joining, user_id, ifsc)
       values ($1, $2, $3, '2025-01-01', $4, 'HDFC0000001') returning id`, [cid, who, `${who}@corp.in`, U[who]]);
@@ -28,25 +31,31 @@ beforeAll(async () => {
   await sys(`update employees set reporting_manager_id = $1 where id = $2`, [E.manager, E.emp]);   // emp reports to manager; emp2 doesn't
   [{ id: structure }] = await sys<{ id: string }>(`select id from salary_structures where company_id = $1`, [cid]);
   await sys(`insert into employee_ctc (company_id, employee_id, structure_id, annual_ctc, effective_from) values ($1, $2, $3, 360000, '2025-01-01')`, [cid, E.emp, structure]);
-  // a task assigned to emp and to finance, created by the manager
+  // a task assigned to emp, created by the manager; one the employee has nothing to do with
   [{ id: task }] = await as<{ id: string }>("manager", `insert into tasks (company_id, title, created_by) values ($1, 'Assigned work', $2) returning id`, [cid, U.manager]);
-  await as("manager", `insert into task_assignees (task_id, employee_id, company_id) values ($1, $2, $3), ($1, $4, $3)`, [task, E.emp, cid, E.finance]);
+  await as("manager", `insert into task_assignees (task_id, employee_id, company_id) values ($1, $2, $3)`, [task, E.emp, cid]);
   [{ id: ownTaskForEmp }] = await as<{ id: string }>("owner", `insert into tasks (company_id, title, created_by) values ($1, 'Unrelated work', $2) returning id`, [cid, U.owner]);
-  // a locked payroll run with a payslip for emp (to check own-payslip access)
+  // a locked payroll run with a payslip for emp and emp2, and a draft run with one for the manager
   const [run] = await sys<{ id: string }>(`insert into payroll_runs (company_id, month, version, status) values ($1, '2026-09-01', 1, 'locked') returning id`, [cid]);
-  for (const who of ["emp", "emp2"]) {
+  const [draft] = await sys<{ id: string }>(`insert into payroll_runs (company_id, month, version, status) values ($1, '2026-10-01', 1, 'draft') returning id`, [cid]);
+  for (const [who, r] of [["emp", run.id], ["emp2", run.id], ["manager", run.id], ["emp", draft.id]]) {
     await sys(`insert into payslips (run_id, company_id, employee_id, month, salary_days, window_days, payable_days, lop_days, ratio, monthly_gross, day_value, earned_gross, gross_payable, total_deductions, net_pay)
-      values ($1, $2, $3, '2026-09-01', 30, 30, 30, 0, 1, 30000, 1000, 30000, 30000, 1800, 28200)`, [run.id, cid, E[who]]);
+      values ($1, $2, $3, '2026-09-01', 30, 30, 30, 0, 1, 30000, 1000, 30000, 30000, 1800, 28200)`, [r, cid, E[who]]);
   }
 }, 120000);
 
-describe("1 · Super Admin", () => {
-  it("is never granted automatically: no existing user is a super admin", async () => {
+describe("§5.3 · six roles, nothing else", () => {
+  it("the Finance role is retired and can't be stored", async () => {
+    await expect(sys(`insert into company_members (company_id, user_id, role) values ($1, $2, 'finance')`, [cid, U.outsider])).rejects.toThrow(/company_members_role_check/);
+    expect(await sys(`select distinct role from role_permissions order by role`)).toEqual(
+      ["company_admin", "employee", "hr", "manager", "owner"].map((role) => ({ role })));
+  });
+});
+
+describe("Super Admin (§5.3, OI-13): tenants and subscriptions, no default access to company data", () => {
+  it("is never granted automatically and can't be granted through the API", async () => {
     expect(await sys(`select * from platform_admins`)).toHaveLength(0);
     for (const who of ["owner", "admin", "hr", "emp"]) expect((await as<{ v: boolean }>(who, `select is_super_admin() v`))[0].v).toBe(false);
-  });
-
-  it("can't be granted through the API, even by a company owner", async () => {
     await expect(as("owner", `insert into platform_admins (user_id) values ($1)`, [U.owner])).rejects.toThrow(/row-level security/);
   });
 
@@ -58,39 +67,34 @@ describe("1 · Super Admin", () => {
     const [m] = await sys<{ role: string; active: boolean }>(`select role, active from company_members where company_id = $1 and user_id = $2`, [cidB, U.outsider]);
     expect(m).toEqual({ role: "company_admin", active: true });
     await as("sa", `select sa_remove_company_admin($1, $2)`, [cidB, U.outsider]);
-    const [after] = await sys<{ active: boolean }>(`select active from company_members where company_id = $1 and user_id = $2`, [cidB, U.outsider]);
-    expect(after.active).toBe(false);
     await expect(as("sa", `select sa_remove_company_admin($1, $2)`, [cid, U.owner])).rejects.toThrow(/owner cannot be removed/);
   });
 
-  it("is not a member or an employee anywhere, but acts as an Administrator in every company", async () => {
-    expect(await sys(`select * from company_members where user_id = $1`, [U.sa])).toHaveLength(0);
-    expect(await sys(`select * from employees where user_id = $1`, [U.sa])).toHaveLength(0);
-    const [{ a }] = await as<{ a: { allowed: boolean; role: string; permissions: string[] } }>("sa", `select my_access($1) a`, [cid]);
-    expect(a.allowed).toBe(true);
-    expect(a.role).toBe("super_admin");
-    expect(a.permissions).toContain("employees.assign_role");
-    expect(a.permissions).toContain("salaries.manage");
+  it("sees no company data until a Company Admin grants time-limited support access", async () => {
+    expect(await perms("sa")).toMatchObject({ allowed: false });
+    expect(await count("sa", `select * from employees where company_id = $1`, [cid])).toBe(0);
+    expect(await count("sa", `select * from payslips`)).toBe(0);
+    // only a member Company Admin grants; never the Owner, HR or the Super Admin itself
+    for (const who of ["owner", "hr", "sa"]) await expect(as(who, `select grant_support_access($1, 4, 'Case 1')`, [cid])).rejects.toThrow(/Only a Company Admin/);
+    await expect(as("admin", `select grant_support_access($1, 100, 'Case 1')`, [cid])).rejects.toThrow(/1 and 72 hours/);
+    await expect(as("admin", `select grant_support_access($1, 4, '  ')`, [cid])).rejects.toThrow(/reason/);
+    const [{ g }] = await as<{ g: string }>("admin", `select grant_support_access($1, 4, 'Ticket 42: payroll export') g`, [cid]);
+    expect(await sys(`select action from audit_log where table_name = 'support_access' and record_id = $1`, [g])).toEqual([{ action: "grant" }]);
+    const a = await perms("sa");
+    expect(a).toMatchObject({ allowed: true, role: "super_admin" });
     expect(a.permissions).not.toContain("salaries.approve");
-    expect(await count("sa", `select * from employees where company_id = $1`, [cid])).toBe(7);
-    expect(await count("sa", `select * from employees where company_id = $1`, [cidB])).toBe(0);   // Other has no employees
-  });
-
-  it("every write it makes is audited as super admin; it can't approve or reopen payroll or promote itself", async () => {
+    expect(await count("sa", `select * from employees where company_id = $1`, [cid])).toBe(6);
+    expect(await count("sa", `select * from employees where company_id = $1`, [cidB])).toBe(0);   // only the granted company
+    // every write is audited as super admin
     await as("sa", `update employees set probation_end = '2025-06-30' where id = $1`, [E.emp]);
-    const [log] = await sys<{ via_super_admin: boolean; user_id: string }>(
-      `select via_super_admin, user_id from audit_log where table_name = 'employees' and record_id = $1 order by id desc limit 1`, [E.emp]);
-    expect(log).toEqual({ via_super_admin: true, user_id: U.sa });
-    await as("sa", `insert into departments (company_id, name) values ($1, 'Platform-made')`, [cid]);   // a table without its own audit
-    expect(await sys(`select * from audit_log where table_name = 'departments' and via_super_admin`)).toHaveLength(1);
-    await as("sa", `select sa_log_access($1)`, [cid]);
-    await as("sa", `select sa_log_access($1)`, [cid]);
-    expect(await sys(`select * from audit_log where action = 'super_admin_access' and company_id = $1`, [cid])).toHaveLength(1);
-    const [r] = await sys<{ id: string }>(`insert into payroll_runs (company_id, month, version, status) values ($1, '2026-07-01', 1, 'draft') returning id`, [cid]);
-    await expect(as("sa", `select approve_payroll($1)`, [r.id])).rejects.toThrow(/Only an Administrator or Finance/);
-    await expect(as("sa", `select sa_set_company_admin($1, 'sa@corp.in')`, [cid])).rejects.toThrow(/yourself/);
-    await expect(as("sa", `insert into company_members (company_id, user_id, role) values ($1, $2, 'company_admin')`, [cid, U.sa])).rejects.toThrow(/row-level security/);
-    await sys(`delete from payroll_runs where id = $1`, [r.id]);
+    const [log] = await sys<{ via_super_admin: boolean }>(`select via_super_admin from audit_log where table_name = 'employees' and record_id = $1 order by id desc limit 1`, [E.emp]);
+    expect(log.via_super_admin).toBe(true);
+    // revoked → no access again
+    await as("admin", `select revoke_support_access($1)`, [g]);
+    expect(await perms("sa")).toMatchObject({ allowed: false });
+    // an expired grant gives nothing
+    await sys(`insert into support_access (company_id, granted_by, reason, expires_at) values ($1, $2, 'old', now() - interval '1 minute')`, [cid, U.admin]);
+    expect(await perms("sa")).toMatchObject({ allowed: false });
   });
 
   it("super-admin functions refuse everyone else", async () => {
@@ -99,58 +103,43 @@ describe("1 · Super Admin", () => {
   });
 });
 
-describe("2 · Employee creation, invitations and roles", () => {
-  it("employees cannot create employees", async () => {
+describe("Employees row: Owner, Company Admin, HR CRUD · Manager R (team) · Employee R, U (own)", () => {
+  it("employees can't create employees or change their own role or membership", async () => {
     await expect(as("emp", `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'x', 'x@corp.in', '2025-01-01')`, [cid]))
+      .rejects.toThrow(/row-level security/);
+    await expect(as("emp", `update employees set invite_role = 'company_admin' where id = $1`, [E.emp])).rejects.toThrow(/Only an administrator/);
+    expect(await count("emp", `update company_members set role = 'company_admin' where user_id = $1 returning id`, [U.emp])).toBe(0);
+  });
+
+  it("HR / Payroll adds employees, sends invitations and links logins (AUTH-04), but doesn't choose system roles", async () => {
+    await as("hr", `insert into employees (company_id, first_name, email, date_of_joining, invited_at) values ($1, 'Inv', 'inv@corp.in', '2025-01-01', now())`, [cid]);
+    await as("hr", `insert into employees (company_id, first_name, email, date_of_joining, user_id) values ($1, 'Link', 'outsider@corp.in', '2025-01-01', $2)`, [cid, U.outsider]);
+    await expect(as("hr", `insert into employees (company_id, first_name, email, date_of_joining, invite_role) values ($1, 'y', 'y@corp.in', '2025-01-01', 'company_admin')`, [cid]))
+      .rejects.toThrow(/Only an administrator can choose the system role/);
+    await expect(as("hr", `update employees set invite_role = 'manager' where id = $1`, [E.emp])).rejects.toThrow(/Only an administrator can change the system role/);
+    expect(await count("hr", `update company_members set role = 'manager' where user_id = $1 returning id`, [U.emp])).toBe(0);
+    await as("hr", `update employees set phone = '9848022338', probation_end = '2025-07-01' where id = $1`, [E.emp]);
+    await expect(as("hr", `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'z', 'z@corp.in', '2025-01-01')`, [cidB]))
       .rejects.toThrow(/row-level security/);
   });
 
-  it("employees cannot change their own role or membership", async () => {
-    await expect(as("emp", `update employees set invite_role = 'company_admin' where id = $1`, [E.emp])).rejects.toThrow(/Only an administrator/);
-    expect(await count("emp", `update company_members set role = 'company_admin' where user_id = $1 returning id`, [U.emp])).toBe(0);
-    await expect(as("emp", `insert into company_members (company_id, user_id, role) values ($1, $2, 'hr')`, [cid, U.outsider])).rejects.toThrow(/row-level security/);
-  });
-
-  it("HR manages records but not account creation, activation or system roles", async () => {
-    // 0024: HR creates plain records — no login, no invitation, the 'employee' role only
-    const [made] = await as<{ invite_role: string; user_id: string | null }>("hr",
-      `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'x', 'x2@corp.in', '2025-01-01') returning invite_role, user_id`, [cid]);
-    expect(made).toEqual({ invite_role: "employee", user_id: null });
-    await expect(as("hr", `insert into employees (company_id, first_name, email, date_of_joining, invite_role) values ($1, 'y', 'y@corp.in', '2025-01-01', 'company_admin')`, [cid]))
-      .rejects.toThrow(/Only an administrator can choose the system role/);
-    await expect(as("hr", `insert into employees (company_id, first_name, email, date_of_joining, invite_role) values ($1, 'y', 'y@corp.in', '2025-01-01', 'hr')`, [cid]))
-      .rejects.toThrow(/Only an administrator can choose the system role/);
-    await expect(as("hr", `insert into employees (company_id, first_name, email, date_of_joining, user_id) values ($1, 'y', 'y@corp.in', '2025-01-01', $2)`, [cid, U.outsider]))
-      .rejects.toThrow(/Only an administrator can link a login/);
-    await expect(as("hr", `insert into employees (company_id, first_name, email, date_of_joining, invited_at) values ($1, 'y', 'y@corp.in', '2025-01-01', now())`, [cid]))
-      .rejects.toThrow(/Only an administrator can send invitations/);
-    await expect(as("hr", `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'z', 'z@corp.in', '2025-01-01')`, [cidB]))
-      .rejects.toThrow(/row-level security/);                 // HR here is nothing in another company
-    await as("hr", `update employees set phone = '9848022338', probation_end = '2025-07-01' where id = $1`, [E.emp]);
-    await expect(as("hr", `update employees set status = 'inactive' where id = $1`, [E.emp])).rejects.toThrow(/Only an administrator/);
-    await expect(as("hr", `update employees set invite_role = 'manager' where id = $1`, [E.emp])).rejects.toThrow(/Only an administrator/);
-    expect(await count("hr", `update company_members set role = 'manager' where user_id = $1 returning id`, [U.emp])).toBe(0);
-  });
-
-  it("nobody can change their own membership, not even an administrator", async () => {
-    expect(await count("admin", `update company_members set role = 'employee' where user_id = $1 returning id`, [U.admin])).toBe(0);
+  it("the Owner and a Company Admin assign system roles, never the owner's and never their own", async () => {
+    const [made] = await as<{ invite_role: string }>("owner",
+      `insert into employees (company_id, first_name, email, date_of_joining, invite_role) values ($1, 'Hema', 'hema@corp.in', '2026-10-01', 'hr') returning invite_role`, [cid]);
+    expect(made.invite_role).toBe("hr");
+    expect(await count("admin", `update company_members set role = 'hr' where user_id = $1 returning id`, [U.emp2])).toBe(1);
+    expect((await perms("emp2")).role).toBe("hr");
+    await as("admin", `update company_members set role = 'employee' where user_id = $1`, [U.emp2]);
+    expect(await count("admin", `update company_members set role = 'employee' where user_id = $1 returning id`, [U.owner])).toBe(0);
     expect(await count("admin", `update company_members set active = false where user_id = $1 returning id`, [U.admin])).toBe(0);
   });
 
-  it("administrators create employees and assign system roles, but cannot touch the owner", async () => {
-    await as("admin", `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'New', 'new@corp.in', '2026-10-01')`, [cid]);
-    // an Administrator can make someone an HR Manager: on a new record, and on an existing member
-    const [hrMade] = await as<{ invite_role: string }>("admin",
-      `insert into employees (company_id, first_name, email, date_of_joining, invite_role) values ($1, 'Hema', 'hema@corp.in', '2026-10-01', 'hr') returning invite_role`, [cid]);
-    expect(hrMade.invite_role).toBe("hr");
-    expect(await count("admin", `update company_members set role = 'hr' where user_id = $1 returning id`, [U.emp2])).toBe(1);
-    expect((await as<{ a: { role: string } }>("emp2", `select my_access($1) a`, [cid]))[0].a.role).toBe("hr");
-    expect(await count("admin", `update company_members set role = 'manager' where user_id = $1 returning id`, [U.emp2])).toBe(1);
-    await as("admin", `update company_members set role = 'employee' where user_id = $1`, [U.emp2]);
-    expect(await count("admin", `update company_members set role = 'employee' where user_id = $1 returning id`, [U.owner])).toBe(0);
+  it("Manager reads their team; Employee reads only their own record", async () => {
+    expect((await as<{ id: string }>("manager", `select id from employees`)).map((r) => r.id).sort()).toEqual([E.manager, E.emp].sort());
+    expect((await as<{ id: string }>("emp", `select id from employees`)).map((r) => r.id)).toEqual([E.emp]);
   });
 
-  it("designation grants nothing: an employee titled 'Manager' stays an employee", async () => {
+  it("designation grants nothing: an employee titled 'HR Manager' stays an employee", async () => {
     const [d] = await sys<{ id: string }>(`insert into designations (company_id, name) values ($1, 'HR Manager') returning id`, [cid]);
     await sys(`update employees set designation_id = $1 where id = $2`, [d.id, E.emp2]);
     expect(await count("emp2", `select * from salary_structures`)).toBe(0);
@@ -158,200 +147,203 @@ describe("2 · Employee creation, invitations and roles", () => {
   });
 });
 
-describe("3–5 · Salaries", () => {
+describe("Attendance row: Owner R · Company Admin, HR CRUD · Manager R, A (team) · Employee R (own)", () => {
+  it("the Owner reads attendance but can't correct, lock, unlock or register devices", async () => {
+    await sys(`insert into daily_attendance (company_id, employee_id, date, status) values ($1, $2, '2026-10-20', 'present'), ($1, $3, '2026-10-20', 'present')`, [cid, E.emp, E.emp2]);
+    expect(await count("owner", `select * from daily_attendance`)).toBe(2);
+    await expect(as("owner", `select set_attendance_status($1, '2026-10-20', 'absent', 'x')`, [E.emp])).rejects.toThrow(/not allowed/);
+    await expect(as("owner", `select unlock_attendance_month($1, '2026-10-01', 'x')`, [cid])).rejects.toThrow(/company administrator/);
+    await expect(as("owner", `select register_device($1, null, 'D', 'SN-O', 'ZK', 'K', null, 'push')`, [cid])).rejects.toThrow(/not allowed/);
+  });
+
+  it("HR and the Company Admin correct attendance; only the Company Admin unlocks a month", async () => {
+    await as("hr", `select set_attendance_status($1, '2026-10-20', 'half_day', 'Left early')`, [E.emp2]);
+    await as("admin", `select set_attendance_status($1, '2026-10-20', 'present', 'Card reader fixed')`, [E.emp2]);
+    await expect(as("hr", `select unlock_attendance_month($1, '2026-10-01', 'x')`, [cid])).rejects.toThrow(/company administrator/);
+    await as("admin", `select unlock_attendance_month($1, '2026-10-01', 'Late punches')`, [cid]);
+  });
+
+  it("a Manager reads and approves their team only; an Employee reads their own", async () => {
+    expect((await as<{ employee_id: string }>("manager", `select employee_id from daily_attendance`)).map((r) => r.employee_id)).toEqual([E.emp]);
+    expect((await as<{ employee_id: string }>("emp", `select employee_id from daily_attendance`)).map((r) => r.employee_id)).toEqual([E.emp]);
+  });
+});
+
+describe("Salaries row: Owner, Company Admin R, A · HR CRUD (prepare) · Manager, Employee R (own payslip)", () => {
   const salaryTables = ["salary_structures", "salary_components", "employee_ctc", "statutory_settings", "variable_inputs", "loans", "recovery_balances", "payroll_runs"];
 
-  it("3 · employees see no payroll data — not even their own CTC — and cannot run or pre-check payroll", async () => {
-    for (const t of salaryTables) expect(await count("emp", `select * from ${t}`), t).toBe(0);
-    await expect(as("emp", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed/);
-    await expect(as("emp", `select * from calculate_payroll_run($1, '2026-10')`, [cid])).rejects.toThrow(/not allowed/);
-    await expect(as("emp", `select payroll_precheck($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed/);
+  it("HR / Payroll prepares payroll: structures, CTC, statutory settings and runs", async () => {
+    await as("hr", `insert into salary_structures (company_id, name) values ($1, 'HR structure')`, [cid]);
+    expect(await count("hr", `update statutory_settings set pf_employee_rate = 12 where company_id = $1 returning company_id`, [cid])).toBe(1);
+    await expect(as("hr", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/Lock attendance/);   // passed the permission check
   });
 
-  it("3 · employees get no payslips (not even their own approved one) and no tax declarations", async () => {
-    expect(await count("emp", `select * from payslips`)).toBe(0);
-    expect(await count("emp", `select * from final_payslips`)).toBe(0);
-    expect(await count("emp", `select * from payslip_lines`)).toBe(0);
-    await expect(as("emp", `insert into tax_declarations (company_id, employee_id, fy_start_year, regime, items) values ($1, $2, 2026, 'old', '{}')`, [cid, E.emp]))
-      .rejects.toThrow(/row-level security/);
+  it("only the Owner or a Company Admin approves; the preparer can't approve their own run", async () => {
+    const [r1] = await sys<{ id: string }>(`insert into payroll_runs (company_id, month, version, status, ran_by) values ($1, '2026-08-01', 1, 'draft', $2) returning id`, [cid, U.hr]);
+    await expect(as("hr", `select approve_payroll($1)`, [r1.id])).rejects.toThrow(/Only the Owner or a Company Admin/);
+    await as("owner", `select approve_payroll($1)`, [r1.id]);
+    expect(await sys(`select * from audit_log where action = 'approve' and record_id = $1`, [r1.id])).toHaveLength(1);
+    await expect(as("hr", `select reopen_payroll($1, 'fix', '2026-08')`, [r1.id])).rejects.toThrow(/owner or a company administrator/);
+    await as("admin", `select reopen_payroll($1, 'Wrong OT', '2026-08')`, [r1.id]);
+    const [r2] = await sys<{ id: string }>(`insert into payroll_runs (company_id, month, version, status, ran_by) values ($1, '2026-08-01', 2, 'draft', $2) returning id`, [cid, U.admin]);
+    await expect(as("admin", `select approve_payroll($1)`, [r2.id])).rejects.toThrow(/someone else must approve/);   // maker-checker kept
+    await as("owner", `select approve_payroll($1)`, [r2.id]);
   });
 
-  it("4 · managers have no Salaries access", async () => {
-    for (const t of salaryTables) expect(await count("manager", `select * from ${t}`), t).toBe(0);
-    expect(await count("manager", `select * from payslips`)).toBe(0);
-    expect(await count("manager", `select * from final_payslips`)).toBe(0);
-    await expect(as("manager", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed/);
+  it("the Owner and a Company Admin read salaries but don't prepare them", async () => {
+    for (const who of ["owner", "admin"]) {
+      expect(await count(who, `select * from employee_ctc`)).toBeGreaterThan(0);
+      await expect(as(who, `insert into salary_structures (company_id, name) values ($1, 'x')`, [cid])).rejects.toThrow(/row-level security/);
+      await expect(as(who, `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed/);
+    }
   });
 
-  it("5 · HR reads Salaries but cannot change or run anything", async () => {
-    expect(await count("hr", `select * from salary_structures`)).toBe(1);
-    expect(await count("hr", `select * from employee_ctc`)).toBe(1);
-    expect(await count("hr", `select * from payslips`)).toBe(2);
-    await expect(as("hr", `insert into salary_structures (company_id, name) values ($1, 'x')`, [cid])).rejects.toThrow(/row-level security/);
-    expect(await count("hr", `update statutory_settings set pf_employee_rate = 1 where company_id = $1 returning company_id`, [cid])).toBe(0);
-    expect(await count("hr", `update payslips set payment_status = 'paid' returning id`)).toBe(0);
-    await expect(as("hr", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed/);
-    await as("hr", `select payroll_precheck($1, '2026-10-01')`, [cid]);   // view-only pre-checks are allowed
-  });
-
-  it("Finance and the Administrator have full Salaries access, including approval (maker-checker)", async () => {
-    await as("finance", `insert into salary_structures (company_id, name) values ($1, 'Finance structure')`, [cid]);
-    await expect(as("finance", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/Lock attendance/);   // passed the permission check
-    const [mine] = await sys<{ id: string }>(`insert into payroll_runs (company_id, month, version, status, ran_by) values ($1, '2026-08-01', 1, 'draft', $2) returning id`, [cid, U.finance]);
-    await expect(as("finance", `select approve_payroll($1)`, [mine.id])).rejects.toThrow(/someone else must approve/);
-    await expect(as("hr", `select approve_payroll($1)`, [mine.id])).rejects.toThrow(/Only an Administrator or Finance/);
-    await as("admin", `select approve_payroll($1)`, [mine.id]);
-    expect(await sys(`select * from audit_log where action = 'approve' and record_id = $1`, [mine.id])).toHaveLength(1);
-    await expect(as("finance", `select reopen_payroll($1, 'fix', '2026-08')`, [mine.id])).rejects.toThrow(/owner or a company administrator/);
-    await expect(as("admin", `select reopen_payroll($1, 'fix', 'yes')`, [mine.id])).rejects.toThrow(/Type 2026-08 to confirm/);
-    await as("admin", `select reopen_payroll($1, 'fix', '2026-08')`, [mine.id]);
-    const [other] = await sys<{ id: string }>(`insert into payroll_runs (company_id, month, version, status, ran_by) values ($1, '2026-08-01', 2, 'draft', $2) returning id`, [cid, U.admin]);
-    await as("finance", `select approve_payroll($1)`, [other.id]);   // Finance approves a run someone else prepared
-    await as("admin", `insert into salary_structures (company_id, name) values ($1, 'Admin structure')`, [cid]);
+  it("Employees and Managers see no salary data, only their own approved payslips (SAL-12)", async () => {
+    for (const who of ["emp", "manager"]) {
+      for (const t of salaryTables) expect(await count(who, `select * from ${t}`), `${who} ${t}`).toBe(0);
+      await expect(as(who, `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed/);
+    }
+    const mine = await as<{ employee_id: string }>("emp", `select employee_id from payslips`);
+    expect(mine).toEqual([{ employee_id: E.emp }]);                         // the approved one, not the draft, not emp2's
+    expect(await count("emp", `select * from payslip_lines`)).toBe(0);      // (none generated in this fixture)
+    expect((await as<{ employee_id: string }>("manager", `select employee_id from payslips`)).map((r) => r.employee_id)).toEqual([E.manager]);
+    expect(await count("emp", `update payslips set net_pay = 1 returning id`)).toBe(0);
   });
 });
 
-describe("6 · Finance and Tasks", () => {
-  it("Finance sees no tasks, even one assigned to them, and cannot create tasks", async () => {
-    expect(await count("finance", `select * from tasks`)).toBe(0);
-    expect(await count("finance", `select * from task_assignees`)).toBe(0);
-    await expect(as("finance", `insert into tasks (company_id, title, created_by) values ($1, 'x', $2)`, [cid, U.finance])).rejects.toThrow(/row-level security/);
+describe("Tasks row: Owner, Company Admin, HR CRUD · Manager CRUD (team) · Employee R, U (assigned), C (own)", () => {
+  it("HR creates, edits and deletes tasks", async () => {
+    const [{ id }] = await as<{ id: string }>("hr", `insert into tasks (company_id, title, created_by) values ($1, 'Onboard Kavya', $2) returning id`, [cid, U.hr]);
+    await as("hr", `insert into task_assignees (task_id, employee_id, company_id) values ($1, $2, $3)`, [id, E.emp2, cid]);
+    expect(await count("hr", `update tasks set title = 'x' where id = $1 returning id`, [task])).toBe(1);
+    expect(await count("hr", `delete from tasks where id = $1 returning id`, [id])).toBe(1);
   });
 
-  it("Finance reads pay-related fields only, through employee_pay_fields", async () => {
-    expect(await count("finance", `select * from employees`)).toBe(1);   // only their own profile
-    expect(await count("finance", `select * from employee_pay_fields`)).toBeGreaterThanOrEqual(7);
-    await as("finance", `select update_employee_pay_fields($1, '{"ifsc": "ICIC0000002", "uan": "100912345678"}')`, [E.emp]);
-    await expect(as("finance", `select update_employee_pay_fields($1, '{"first_name": "Hacked"}')`, [E.emp])).rejects.toThrow(/pay-related/);
-    await expect(as("emp", `select update_employee_pay_fields($1, '{"ifsc": "ICIC0000003"}')`, [E.emp])).rejects.toThrow(/not allowed/);
-  });
-
-  it("HR has view-only Tasks access", async () => {
-    expect(await count("hr", `select * from tasks`)).toBeGreaterThanOrEqual(2);
-    await expect(as("hr", `insert into tasks (company_id, title, created_by) values ($1, 'x', $2)`, [cid, U.hr])).rejects.toThrow(/row-level security/);
-    expect(await count("hr", `update tasks set title = 'x' where id = $1 returning id`, [task])).toBe(0);
-    await expect(as("hr", `insert into task_comments (task_id, company_id, body) values ($1, $2, 'x')`, [task, cid])).rejects.toThrow(/row-level security/);
-  });
-});
-
-describe("7 · Employees see their own profile and assigned tasks", () => {
-  it("only their own employee record", async () => {
-    const rows = await as<{ id: string }>("emp", `select id from employees`);
-    expect(rows.map((r) => r.id)).toEqual([E.emp]);
-  });
-
-  it("only tasks assigned to them; they work on them but cannot create or reassign", async () => {
-    const rows = await as<{ id: string }>("emp", `select id from tasks`);
-    expect(rows.map((r) => r.id)).toEqual([task]);
+  it("an Employee works on assigned tasks and creates tasks for themselves only", async () => {
+    expect((await as<{ id: string }>("emp", `select id from tasks`)).map((r) => r.id)).toEqual([task]);
     expect(await count("emp", `select * from tasks where id = $1`, [ownTaskForEmp])).toBe(0);
     expect(await count("emp", `update tasks set status = 'in_progress' where id = $1 returning id`, [task])).toBe(1);
-    await as("emp", `insert into task_comments (task_id, company_id, body) values ($1, $2, 'on it')`, [task, cid]);
-    await expect(as("emp", `insert into tasks (company_id, title, created_by) values ($1, 'mine', $2)`, [cid, U.emp])).rejects.toThrow(/row-level security/);
+    const [{ id: own }] = await as<{ id: string }>("emp", `insert into tasks (company_id, title, created_by) values ($1, 'Renew my ID card', $2) returning id`, [cid, U.emp]);
+    await as("emp", `insert into task_assignees (task_id, employee_id, company_id) values ($1, $2, $3)`, [own, E.emp, cid]);
+    await expect(as("emp", `insert into task_assignees (task_id, employee_id, company_id) values ($1, $2, $3)`, [own, E.emp2, cid])).rejects.toThrow(/row-level security/);
     await expect(as("emp", `insert into task_assignees (task_id, employee_id, company_id) values ($1, $2, $3)`, [task, E.emp2, cid])).rejects.toThrow(/row-level security/);
-  });
-});
-
-describe("8 · Managers see their team only", () => {
-  it("employee records: themselves and direct reports", async () => {
-    const rows = await as<{ id: string }>("manager", `select id from employees order by id`);
-    expect(rows.map((r) => r.id).sort()).toEqual([E.manager, E.emp].sort());
+    expect(await count("emp", `update tasks set due_at = now() where id = $1 returning id`, [own])).toBe(1);
   });
 
-  it("attendance: their team, not other employees", async () => {
-    await sys(`insert into daily_attendance (company_id, employee_id, date, status) values ($1, $2, '2026-10-20', 'present'), ($1, $3, '2026-10-20', 'present')`, [cid, E.emp, E.emp2]);
-    const rows = await as<{ employee_id: string }>("manager", `select employee_id from daily_attendance`);
-    expect(rows.map((r) => r.employee_id)).toEqual([E.emp]);
-    expect(await count("finance", `select * from daily_attendance`)).toBe(2);   // payroll needs the whole company
-  });
-
-  it("tasks: they manage their team's work", async () => {
+  it("a Manager manages their team's tasks, not others'", async () => {
     expect(await count("manager", `update tasks set priority = 'high' where id = $1 returning id`, [task])).toBe(1);
     expect(await count("manager", `select * from tasks where id = $1`, [ownTaskForEmp])).toBe(0);
   });
 });
 
-describe("9 · Tenant isolation", () => {
-  it("no role reads another company's records", async () => {
-    for (const who of ["owner", "admin", "hr", "finance", "manager", "emp"]) {
-      for (const t of ["employees", "payroll_runs", "salary_structures", "tasks", "daily_attendance"]) {
-        expect(await count(who, `select * from ${t} where company_id = $1`, [cidB]), `${who} ${t}`).toBe(0);
-      }
-    }
-    expect(await count("ownerB", `select * from employees where company_id = $1`, [cid])).toBe(0);
-    await expect(as("ownerB", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed/);
-  });
-});
-
-describe("10 · Inactive users and invalid roles", () => {
-  it("my_access reports allowed with permissions from the server-side matrix", async () => {
-    const [{ a }] = await as<{ a: { allowed: boolean; role: string; permissions: string[] } }>("finance", `select my_access($1) a`, [cid]);
-    expect(a.allowed).toBe(true);
-    expect(a.role).toBe("finance");
-    expect(a.permissions).toContain("salaries.manage");
-    expect(a.permissions).not.toContain("tasks.use");
-  });
-
-  it("an inactive employee loses all access, even with an active membership", async () => {
-    await sys(`update employees set status = 'inactive' where id = $1`, [E.emp2]);
-    const [{ a }] = await as<{ a: { allowed: boolean; reason: string } }>("emp2", `select my_access($1) a`, [cid]);
-    expect(a).toMatchObject({ allowed: false, reason: "employee_inactive" });
-    expect(await count("emp2", `select * from employees`)).toBe(0);
-    expect(await count("emp2", `select * from payslips`)).toBe(0);
-    expect(await count("emp2", `select * from companies where id = $1`, [cid])).toBe(0);
-    await expect(as("emp2", `select open_dm($1, $2)`, [cid, U.emp])).rejects.toThrow(/not allowed/);
-  });
-
-  it("an exited employee and a disabled membership are denied too", async () => {
-    await sys(`update employees set status = 'exited', last_working_day = '2026-09-30' where id = $1`, [E.emp2]);
-    expect((await as<{ a: { allowed: boolean } }>("emp2", `select my_access($1) a`, [cid]))[0].a.allowed).toBe(false);
-    await sys(`update company_members set active = false where user_id = $1`, [U.manager]);
-    const [{ a }] = await as<{ a: { allowed: boolean; reason: string } }>("manager", `select my_access($1) a`, [cid]);
-    expect(a).toMatchObject({ allowed: false, reason: "membership_inactive" });
-    expect(await count("manager", `select * from employees`)).toBe(0);
-    await sys(`update company_members set active = true where user_id = $1`, [U.manager]);
-  });
-
-  it("a role outside the matrix cannot be stored, and non-members get nothing", async () => {
-    await expect(sys(`insert into company_members (company_id, user_id, role) values ($1, $2, 'superuser')`, [cid, U.outsider])).rejects.toThrow(/company_members_role_check/);
-    const [{ a }] = await as<{ a: { allowed: boolean; reason: string } }>("outsider", `select my_access($1) a`, [cid]);
-    expect(a).toMatchObject({ allowed: false, reason: "not_member" });
-  });
-});
-
-describe("Projects (confirmed mapping)", () => {
-  let led: string, other: string;
-  it("Administrator full; a Manager creates only projects they lead; Finance has none", async () => {
-    [{ id: other }] = await as<{ id: string }>("admin", `insert into projects (company_id, name) values ($1, 'Admin project') returning id`, [cid]);
-    await expect(as("manager", `insert into projects (company_id, name) values ($1, 'Not mine')`, [cid])).rejects.toThrow(/row-level security/);
-    [{ id: led }] = await as<{ id: string }>("manager", `insert into projects (company_id, name, manager_id) values ($1, 'Mine', $2) returning id`, [cid, E.manager]);
-    expect(await count("manager", `update projects set client = 'X' where id = $1 returning id`, [led])).toBe(1);
-    expect(await count("manager", `update projects set client = 'X' where id = $1 returning id`, [other])).toBe(0);
-    expect(await count("finance", `select * from projects`)).toBe(0);
+describe("Projects row: Owner, Company Admin CRUD · HR R · Manager R, U (projects they manage) · Employee R (member)", () => {
+  let led: string, adminProject: string;
+  it("only the Owner and a Company Admin create projects", async () => {
+    [{ id: adminProject }] = await as<{ id: string }>("admin", `insert into projects (company_id, name) values ($1, 'Admin project') returning id`, [cid]);
+    [{ id: led }] = await as<{ id: string }>("owner", `insert into projects (company_id, name, manager_id) values ($1, 'Led by manager', $2) returning id`, [cid, E.manager]);
+    await expect(as("manager", `insert into projects (company_id, name, manager_id) values ($1, 'Mine', $2)`, [cid, E.manager])).rejects.toThrow(/row-level security/);
     await expect(as("hr", `insert into projects (company_id, name) values ($1, 'HR')`, [cid])).rejects.toThrow(/row-level security/);
   });
 
-  it("HR, Managers and Employees read only the projects they belong to", async () => {
+  it("a Manager updates the project they manage, nothing else; HR reads all; Employees read member projects", async () => {
+    expect(await count("manager", `update projects set client = 'X' where id = $1 returning id`, [led])).toBe(1);
+    expect(await count("manager", `update projects set client = 'X' where id = $1 returning id`, [adminProject])).toBe(0);
+    expect(await count("hr", `select * from projects`)).toBe(2);
+    expect(await count("hr", `update projects set client = 'Y' where id = $1 returning id`, [led])).toBe(0);
     expect(await count("emp", `select * from projects`)).toBe(0);
-    expect(await count("hr", `select * from projects`)).toBe(0);
-    await as("manager", `insert into project_members (project_id, employee_id, company_id) values ($1, $2, $3), ($1, $4, $3)`, [led, E.emp, cid, E.hr]);
+    await as("manager", `insert into project_members (project_id, employee_id, company_id) values ($1, $2, $3)`, [led, E.emp, cid]);
     expect(await count("emp", `select * from projects`)).toBe(1);
-    expect(await count("hr", `select * from projects`)).toBe(1);
     expect(await count("emp", `update projects set client = 'Y' where id = $1 returning id`, [led])).toBe(0);
-    expect(await count("admin", `select * from projects`)).toBe(2);
   });
 });
 
-describe("Leave Management is off in Phase 1", () => {
-  it("is blocked at the database for every role, and returns when the operator enables it", async () => {
+describe("Leave row: Owner R · Company Admin, HR CRUD · Manager R, A (team) · Employee C, R (own)", () => {
+  it("Leave Management is on (MVP)", async () => {
+    expect((await perms("emp")).permissions).toContain("feature.leave");
     const [lt] = await sys<{ id: string }>(`select id from leave_types where company_id = $1 and code = 'CL'`, [cid]);
-    await expect(as("emp", `insert into leave_requests (company_id, employee_id, leave_type_id, from_date, to_date) values ($1, $2, $3, '2026-11-02', '2026-11-02')`, [cid, E.emp, lt.id]))
+    const [{ id }] = await as<{ id: string }>("emp", `insert into leave_requests (company_id, employee_id, leave_type_id, from_date, to_date) values ($1, $2, $3, '2026-11-02', '2026-11-02') returning id`, [cid, E.emp, lt.id]);
+    await expect(as("emp", `insert into leave_requests (company_id, employee_id, leave_type_id, from_date, to_date) values ($1, $2, $3, '2026-11-03', '2026-11-03')`, [cid, E.emp2, lt.id]))
       .rejects.toThrow(/row-level security/);
-    expect(await count("owner", `select * from leave_types`)).toBe(0);
-    expect((await as<{ a: { permissions: string[] } }>("emp", `select my_access($1) a`, [cid]))[0].a.permissions).not.toContain("feature.leave");
-    await sys(`update platform_features set enabled = true where feature = 'leave'`);
-    expect((await as<{ a: { permissions: string[] } }>("emp", `select my_access($1) a`, [cid]))[0].a.permissions).toContain("feature.leave");
-    expect(await count("owner", `select * from leave_types`)).toBeGreaterThan(0);
-    await sys(`update platform_features set enabled = false where feature = 'leave'`);
+    expect(await count("owner", `select * from leave_requests`)).toBe(1);                  // Owner: R
+    expect(await count("emp2", `select * from leave_requests`)).toBe(0);
+    expect(await count("manager", `update leave_requests set status = 'approved' where id = $1 returning id`, [id])).toBe(1);
+  });
+});
+
+describe("Settings and audit log row: Owner R · Company Admin CRUD · HR R · Manager, Employee none", () => {
+  it("only a Company Admin changes settings; the Owner also edits the company profile (Companies CRUD)", async () => {
+    for (const who of ["owner", "admin", "hr"]) expect((await perms(who)).permissions, who).toContain("settings.read");
+    for (const who of ["manager", "emp"]) expect((await perms(who)).permissions, who).not.toContain("settings.read");
+    await as("admin", `insert into departments (company_id, name) values ($1, 'Legal')`, [cid]);
+    for (const who of ["owner", "hr"]) {
+      await expect(as(who, `insert into departments (company_id, name) values ($1, 'X-${who}')`, [cid])).rejects.toThrow(/row-level security/);
+      await expect(as(who, `insert into branches (company_id, name) values ($1, 'B-${who}')`, [cid])).rejects.toThrow(/row-level security/);
+    }
+    expect(await count("owner", `update companies set legal_name = 'Acme Pvt Ltd' where id = $1 returning id`, [cid])).toBe(1);
+    expect(await count("hr", `update companies set legal_name = 'x' where id = $1 returning id`, [cid])).toBe(0);
+  });
+
+  it("the audit log is readable by Owner, Company Admin and HR only", async () => {
+    for (const who of ["owner", "admin", "hr"]) expect(await count(who, `select * from audit_log where company_id = $1`, [cid]), who).toBeGreaterThan(0);
+    for (const who of ["manager", "emp"]) expect(await count(who, `select * from audit_log where company_id = $1`, [cid]), who).toBe(0);
+  });
+
+  it("announcements are posted by administrators and HR only (COMMS-08)", async () => {
+    for (const who of ["admin", "hr"]) await as(who, `insert into announcements (company_id, title, body, created_by) values ($1, 'Hi', 'x', $2)`, [cid, U[who]]);
+    for (const who of ["owner", "manager", "emp"]) await expect(as(who, `insert into announcements (company_id, title, body, created_by) values ($1, 'Hi', 'x', $2)`, [cid, U[who]])).rejects.toThrow(/row-level security/);
+  });
+});
+
+describe("Tenant isolation and access loss", () => {
+  it("no role reads another company's records", async () => {
+    for (const who of ["owner", "admin", "hr", "manager", "emp"]) {
+      for (const t of ["employees", "payroll_runs", "payslips", "salary_structures", "tasks", "daily_attendance"]) {
+        expect(await count(who, `select * from ${t} where company_id = $1`, [cidB]), `${who} ${t}`).toBe(0);
+      }
+    }
+    await expect(as("ownerB", `select run_payroll($1, '2026-10-01')`, [cid])).rejects.toThrow(/not allowed/);
+  });
+
+  it("an inactive or exited employee, or a disabled membership, loses all access", async () => {
+    await sys(`update employees set status = 'inactive' where id = $1`, [E.emp2]);
+    expect(await perms("emp2")).toMatchObject({ allowed: false, reason: "employee_inactive" });
+    expect(await count("emp2", `select * from payslips`)).toBe(0);
+    await sys(`update employees set status = 'exited', last_working_day = '2026-09-30' where id = $1`, [E.emp2]);
+    expect((await perms("emp2")).allowed).toBe(false);
+    await sys(`update company_members set active = false where user_id = $1`, [U.manager]);
+    expect(await perms("manager")).toMatchObject({ allowed: false, reason: "membership_inactive" });
+    await sys(`update company_members set active = true where user_id = $1`, [U.manager]);
+    expect(await perms("outsider")).toMatchObject({ allowed: false });
+  });
+});
+
+describe("Retention (NFR-09): archiving keeps statutory records for 8 years", () => {
+  it("90 days after archiving only other data goes; after 8 years the company goes", async () => {
+    const [{ id: co }] = await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Archived Co') returning id`, [U.ownerB]);
+    const [{ id: e }] = await sys<{ id: string }>(`insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'Old', 'old@a.in', '2020-01-01') returning id`, [co]);
+    const [{ id: r }] = await sys<{ id: string }>(`insert into payroll_runs (company_id, month, version, status) values ($1, '2026-01-01', 1, 'locked') returning id`, [co]);
+    await sys(`insert into payslips (run_id, company_id, employee_id, month, salary_days, window_days, payable_days, lop_days, ratio, monthly_gross, day_value, earned_gross, gross_payable, total_deductions, net_pay)
+      values ($1, $2, $3, '2026-01-01', 31, 31, 31, 0, 1, 30000, 967, 30000, 30000, 0, 30000)`, [r, co, e]);
+    await sys(`insert into daily_attendance (company_id, employee_id, date, status) values ($1, $2, '2026-01-05', 'present')`, [co, e]);
+    await sys(`insert into tasks (company_id, title, created_by) values ($1, 'Old task', $2)`, [co, U.ownerB]);
+    await sys(`insert into announcements (company_id, title, body, created_by) values ($1, 'Old', 'x', $2)`, [co, U.ownerB]);
+    const kept = async () => (await sys<{ n: number }>(`select (select count(*) from payslips where company_id = $1) + (select count(*) from daily_attendance where company_id = $1)
+      + (select count(*) from employees where company_id = $1) + (select count(*) from payroll_runs where company_id = $1) as n`, [co]))[0].n;
+
+    await sys(`update companies set status = 'archived', archived_at = now() - interval '91 days' where id = $1`, [co]);
+    await sys(`select purge_archived_companies()`);
+    expect(Number(await kept())).toBe(4);                                               // statutory records stay
+    expect(await sys(`select * from tasks where company_id = $1`, [co])).toHaveLength(0);
+    expect(await sys(`select * from announcements where company_id = $1`, [co])).toHaveLength(0);
+    expect(await sys(`select * from company_members where company_id = $1`, [co])).toHaveLength(0);
+    const [{ purged_at }] = await sys<{ purged_at: string | null }>(`select purged_at from companies where id = $1`, [co]);
+    expect(purged_at).not.toBeNull();
+    await sys(`select purge_archived_companies()`);                                      // running again changes nothing
+    expect(Number(await kept())).toBe(4);
+
+    await sys(`update companies set archived_at = now() - interval '8 years 1 day' where id = $1`, [co]);
+    await sys(`select purge_archived_companies()`);
+    expect(await sys(`select * from companies where id = $1`, [co])).toHaveLength(0);
   });
 });
 
@@ -362,11 +354,11 @@ describe("Staff directory and employee removal", () => {
     expect(row).toHaveProperty("designation");
   });
 
-  it("an employee with payroll history can't be deleted; one created by mistake can, by an administrator", async () => {
+  it("an employee with payroll history can't be deleted; one created by mistake can, by HR or an administrator", async () => {
     await expect(as("admin", `delete from employees where id = $1`, [E.emp])).rejects.toThrow(/history/);
     const [{ id }] = await as<{ id: string }>("admin", `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'Typo', 'typo@corp.in', '2026-10-01') returning id`, [cid]);
-    expect(await count("hr", `delete from employees where id = $1 returning id`, [id])).toBe(0);
-    expect(await count("admin", `delete from employees where id = $1 returning id`, [id])).toBe(1);
+    expect(await count("emp", `delete from employees where id = $1 returning id`, [id])).toBe(0);
+    expect(await count("hr", `delete from employees where id = $1 returning id`, [id])).toBe(1);   // HR / Payroll: Employees CRUD
     expect(await sys(`select * from audit_log where table_name = 'employees' and action = 'delete' and record_id = $1`, [id])).toHaveLength(1);
   });
 });
@@ -395,9 +387,10 @@ describe("Candidate sign-up and approval (0021)", () => {
   let req: string, hrDesig: string, plainDesig: string, hrDept: string;
   it("only an administrator sets which access role a designation gives", async () => {
     [{ id: hrDesig }] = await as<{ id: string }>("admin", `insert into designations (company_id, name, access_role) values ($1, 'HR Executive', 'hr') returning id`, [cid]);
-    await expect(as("hr", `insert into designations (company_id, name, access_role) values ($1, 'Boss', 'company_admin')`, [cid])).rejects.toThrow(/Only an administrator/);
-    [{ id: plainDesig }] = await as<{ id: string }>("hr", `insert into designations (company_id, name) values ($1, 'Clerk') returning id`, [cid]);
-    await expect(as("hr", `update designations set access_role = 'company_admin' where id = $1`, [plainDesig])).rejects.toThrow(/Only an administrator/);
+    // BRD §5.3: Settings are read-only for HR, so HR can't add designations or their access role at all
+    await expect(as("hr", `insert into designations (company_id, name, access_role) values ($1, 'Boss', 'company_admin')`, [cid])).rejects.toThrow(/row-level security|Only an administrator/);
+    [{ id: plainDesig }] = await as<{ id: string }>("admin", `insert into designations (company_id, name) values ($1, 'Clerk') returning id`, [cid]);
+    expect(await count("hr", `update designations set access_role = 'company_admin' where id = $1 returning id`, [plainDesig])).toBe(0);
     // 0022: designations sit under a department; candidates pick the department first
     [{ id: hrDept }] = await sys<{ id: string }>(`insert into departments (company_id, name) values ($1, 'Human Resources') returning id`, [cid]);
     await as("admin", `update designations set department_id = $1 where id = any($2)`, [hrDept, [hrDesig, plainDesig]]);
@@ -413,7 +406,7 @@ describe("Candidate sign-up and approval (0021)", () => {
     await expect(as("cand", `select submit_join_request($1, 'Ravi', null, $2, $3, null)`, [cid, (await sys<{ id: string }>(`select id from designations where company_id = $1 limit 1`, [cidB]))[0]?.id ?? cid, hrDept]))
       .rejects.toThrow(/designation/);
     expect(await count("admin", `select * from join_requests where status = 'pending'`)).toBe(1);
-    expect(await count("hr", `select * from join_requests`)).toBe(0);                    // HR doesn't approve
+    expect(await count("hr", `select * from join_requests`)).toBe(1);                    // HR sees it (employees.account) but can't approve
     expect(await count("ownerB", `select * from join_requests`)).toBe(0);                // other companies don't see it
   });
 

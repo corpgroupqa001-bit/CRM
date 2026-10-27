@@ -6,7 +6,7 @@
 //   earned gross = 30,000 × 28 ÷ 31 = ₹27,097; 6 h approved OT at ₹241.94/h = ₹1,452
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { asOwnerUser, asUser, createDb, createUser } from "./db";
+import { addMember, asOwnerUser, asUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 let owner: string, cid: string, structure: string;
@@ -41,6 +41,7 @@ beforeAll(async () => {
   db = await createDb();
   owner = await createUser(db, "owner@acme.in");
   [{ id: cid }] = await q<{ id: string }>(`insert into companies (owner_id, name, weekly_offs) values ($1, 'Acme', '{0}') returning id`, [owner]);
+  owner = await addMember(db, cid, "hr@acme.in", "hr");   // HR / Payroll prepares payroll (SAL-09)
   [{ id: structure }] = await q<{ id: string }>(`select id from salary_structures where company_id = $1`, [cid]);
   await q(`insert into holidays (company_id, date, name) values ($1, '2026-10-02', 'Gandhi Jayanti')`, [cid]);
 

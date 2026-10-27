@@ -20,8 +20,8 @@ export const metadata = { title: "Platform admin" };
 // Access is a row in platform_admins (granted by the operator in SQL, never automatically) and
 // every action is checked on the server (is_super_admin() with the signed-in user's session) before it
 // runs. Creating a company and changing its owner use the server-only service client after that check
-// (the key never reaches the browser) and are written to the audit log. "Open" enters a company as an
-// Administrator (without payroll approval or reopening); every visit and write there is audited.
+// (the key never reaches the browser) and are written to the audit log. "Open" enters a company only while
+// its Company Admin has granted time-limited support access (BRD OI-13); every visit and write is audited.
 //
 // The portal has its own session (lib/supabase/scopes.ts: cookie on path /admin), separate from the
 // company session, so a Super Admin and an employee can be signed in at once in one browser.
@@ -200,7 +200,7 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
             return (
               <tr key={c.id} className="align-top">
                 <td className="td font-medium text-slate-900">{c.name}<div className="text-xs font-normal text-slate-500">since {fmtDate(c.created_at)}</div>
-                  <a href={`/c/${c.id}/dashboard`} className="text-xs font-medium text-brand-600 hover:underline" title="Opens the company app, which has its own sign-in">Open →</a></td>
+                  <a href={`/c/${c.id}/dashboard`} className="text-xs font-medium text-brand-600 hover:underline" title="Works only while this company's admin has granted support access">Open →</a></td>
                 <td className="td text-xs">{c.owner_email ?? "—"}
                   <ActionForm action={changeOwner} className="mt-2 flex flex-wrap gap-1 [&>p]:basis-full" confirm={`Change the owner of ${c.name}? The current owner becomes an Administrator.`}>
                     <input type="hidden" name="company" value={c.id} />
@@ -241,7 +241,7 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
       <p className="mt-4 text-xs text-slate-500">
         Adding an administrator gives an existing account the Administrator role in that company; it does not create an employee record.
         Super admins are granted only by the platform operator (see README → Super Admin). Opening a company is recorded in its audit log.
-        &ldquo;Open&rdquo; goes to the company app, which has its own sign-in: the admin portal&apos;s session is separate.
+        &ldquo;Open&rdquo; goes to the company app, which has its own sign-in: the admin portal&apos;s session is separate. You see a company&apos;s employees, attendance and payroll only while its Company Admin has granted support access (Settings → Support access), for up to 72 hours.
       </p>
     </main>
   );

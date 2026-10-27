@@ -10,7 +10,7 @@ const done = (cid: string, msg = "Saved.") => { revalidatePath(`/c/${cid}/settin
 export async function saveCompany(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
   return attempt(async () => {
     const ctx = await getCtx(cid);
-    assertPerm(ctx, "settings.manage");
+    assertPerm(ctx, "company.update");   // Owner (Companies CRUD) and Company Admin (R, U own company)
     const { supabase } = ctx;
     const patch: Record<string, unknown> = {};
     for (const k of ["name", "legal_name", "address", "state", "gstin", "pan", "tan", "pf_reg_no", "esi_reg_no", "emp_code_prefix"]) patch[k] = str(fd, k);
@@ -204,5 +204,22 @@ export async function deleteSchedule(cid: string, id: string) {
   assertPerm(ctx, "settings.manage");
   const { supabase } = ctx;
   await supabase.from("report_schedules").delete().eq("id", id);
+  revalidatePath(`/c/${cid}/settings`);
+}
+
+// OI-13: a Company Admin lets the platform Super Admin into this company for a limited time (1–72 h)
+export async function grantSupportAccess(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "settings.manage");
+    must(await ctx.supabase.rpc("grant_support_access", { p_company: cid, p_hours: Number(str(fd, "hours") ?? 0), p_reason: str(fd, "reason") ?? "" }));
+    return done(cid, "Support access granted.");
+  });
+}
+
+export async function revokeSupportAccess(cid: string, id: string) {
+  const ctx = await getCtx(cid);
+  assertPerm(ctx, "settings.manage");
+  must(await ctx.supabase.rpc("revoke_support_access", { p_id: id }));
   revalidatePath(`/c/${cid}/settings`);
 }

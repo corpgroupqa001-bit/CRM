@@ -44,12 +44,12 @@ describe("assigning one person to several companies", () => {
   it("can cover all five companies, each with its own role", async () => {
     await assign("sa", U.person, C[2], "manager");
     await assign("sa", U.person, C[3], "employee");
-    await assign("sa", U.person, C[4], "finance");
+    await assign("sa", U.person, C[4], "employee");
     const rows = await as<{ company_id: string; role: string; is_active: boolean }>("sa", `select * from sa_person_assignments($1)`, [U.person]);
     expect(rows.filter((r) => r.is_active)).toHaveLength(5);
     expect(await access("person", C[0])).toMatchObject({ allowed: true, role: "employee" });
     expect(await access("person", C[1])).toMatchObject({ allowed: true, role: "hr" });
-    expect(await access("person", C[4])).toMatchObject({ allowed: true, role: "finance" });
+    expect(await access("person", C[4])).toMatchObject({ allowed: true, role: "employee" });
   });
 
   it("never creates a duplicate record in the same company", async () => {

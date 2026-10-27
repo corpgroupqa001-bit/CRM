@@ -32,7 +32,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
   if (!e) notFound();
   const tab = payOnly ? "statutory" : sp.tab ?? "profile";
   const hr = perms.has("employees.update");        // HR Manager and Administrator: employee records
-  const acct = perms.has("employees.account");     // Administrator: invitations, login, activation
+  const acct = perms.has("employees.account");     // HR / Payroll and administrators: invitations, login, activation
   const self = me?.id === eid;
   const base = `/c/${cid}/employees/${eid}`;
   const [{ data: dir }, { data: superAdmin }] = await Promise.all([
@@ -79,7 +79,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     body = (
       <Card title="Job details">
         <ActionForm action={updateEmployee.bind(null, cid, eid, "job")} className="grid gap-4 md:grid-cols-3">
-          <JobFields e={e} o={o} canSetRole={acct} />
+          <JobFields e={e} o={o} canSetRole={perms.has("employees.assign_role")} />
           <div className="md:col-span-3"><SubmitButton>Save</SubmitButton></div>
         </ActionForm>
       </Card>

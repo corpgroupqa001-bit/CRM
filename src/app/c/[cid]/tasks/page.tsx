@@ -46,6 +46,7 @@ export default async function Tasks({ params, searchParams }: { params: Promise<
   const now = new Date().toISOString();
   const qs = (patch: Partial<Search>) => `?${new URLSearchParams(Object.fromEntries(Object.entries({ ...sp, ...patch, new: undefined }).filter(([, v]) => v)) as Record<string, string>)}`;
   const canAssignOthers = perms.has("tasks.manage");
+  const canCreate = canAssignOthers || perms.has("tasks.create_own");   // BRD §5.3: an Employee creates tasks for themselves
 
   let body: React.ReactNode;
   if (view === "board") {
@@ -166,8 +167,8 @@ export default async function Tasks({ params, searchParams }: { params: Promise<
     <>
       <PageHeader title="Tasks" actions={<>
         {canAssignOthers && !!templates?.length && <Link href="?view=templates" className="btn-secondary">From template</Link>}
-        {canAssignOthers && <Link href={`${qs({})}&new=1`} className="btn-primary">+ New task</Link>}</>} />
-      {sp.new && canAssignOthers && (
+        {canCreate && <Link href={`${qs({})}&new=1`} className="btn-primary">+ New task</Link>}</>} />
+      {sp.new && canCreate && (
         <Card title="New task" className="mb-6">
           <ActionForm action={createTask.bind(null, cid)} className="grid gap-4 md:grid-cols-4">
             {sp.from_message && <input type="hidden" name="from_message" value={sp.from_message} />}

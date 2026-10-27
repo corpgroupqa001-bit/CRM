@@ -69,12 +69,12 @@ export function StatutoryFields({ e = {} }: { e?: Emp }) {
   const masked = (k: string) => (e[`${k}_last4`] ? `•••• ${e[`${k}_last4`]}` : "Not set");
   return (
     <>
-      <Field label="PAN" hint={`Current: ${masked("pan")}`}><input className="input uppercase" name="pan" placeholder="ABCDE1234F" autoComplete="off" /></Field>
-      <Field label="Aadhaar" hint={`Current: ${masked("aadhaar")}`}><input className="input" name="aadhaar" placeholder="12 digits" inputMode="numeric" autoComplete="off" /></Field>
+      <Field label="PAN" hint={`Current: ${masked("pan")}`}><input className="input uppercase" name="pan" placeholder="ABCDE1234F" autoComplete="off" maxLength={10} pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]" title="PAN: 5 letters, 4 digits, 1 letter (ABCDE1234F)" /></Field>
+      <Field label="Aadhaar" hint={`Current: ${masked("aadhaar")}`}><input className="input" name="aadhaar" placeholder="12 digits" inputMode="numeric" autoComplete="off" maxLength={14} pattern="\s*(\d\s*){12}" title="Aadhaar: 12 digits" /></Field>
       <Field label="UAN"><input className="input" name="uan" defaultValue={(e.uan as string) ?? ""} /></Field>
       <Field label="ESI number"><input className="input" name="esi_no" defaultValue={(e.esi_no as string) ?? ""} /></Field>
-      <Field label="Bank account" hint={`Current: ${masked("bank")}`}><input className="input" name="bank_account" inputMode="numeric" autoComplete="off" /></Field>
-      <Field label="IFSC"><input className="input uppercase" name="ifsc" defaultValue={(e.ifsc as string) ?? ""} placeholder="HDFC0001234" /></Field>
+      <Field label="Bank account" hint={`Current: ${masked("bank")}`}><input className="input" name="bank_account" inputMode="numeric" autoComplete="off" pattern="\s*(\d\s*){6,18}" title="Bank account: 6–18 digits" /></Field>
+      <Field label="IFSC"><input className="input uppercase" name="ifsc" defaultValue={(e.ifsc as string) ?? ""} placeholder="HDFC0001234" maxLength={11} pattern="[A-Za-z]{4}0[A-Za-z0-9]{6}" title="IFSC: 4 letters, 0, then 6 letters or digits (HDFC0001234)" /></Field>
       <Field label="Bank name"><input className="input" name="bank_name" defaultValue={(e.bank_name as string) ?? ""} /></Field>
     </>
   );

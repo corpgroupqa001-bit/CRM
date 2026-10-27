@@ -3,7 +3,7 @@
 // (31 days; Sundays 4/11/18/25 are weekly offs; 2 Oct is the holiday).
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { asOwnerUser, createDb, createUser } from "./db";
+import { addMember, asOwnerUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 let owner: string;
@@ -75,8 +75,9 @@ beforeAll(async () => {
   owner = await createUser(db, "priya@acme.in");
   [{ id: company }] = await q<{ id: string }>(
     `insert into companies (owner_id, name, weekly_offs) values ($1, 'Acme', '{0}') returning id`, [owner]);
-  approver = await createUser(db, "finance@acme.in");
-  await q(`insert into company_members (company_id, user_id, role) values ($1, $2, 'finance')`, [company, approver]);
+  // SAL-09: HR / Payroll prepares the run, the Owner (or a Company Admin) approves it
+  approver = owner;
+  owner = await addMember(db, company, "hr@acme.in", "hr");
   [{ id: structure }] = await q<{ id: string }>(
     `select id from salary_structures where company_id = $1`, [company]);
   await q(`insert into holidays (company_id, date, name) values ($1, $2, 'Gandhi Jayanti')`, [company, HOLIDAY]);
@@ -210,16 +211,20 @@ describe("BRD §9 payroll scenarios", () => {
     await markMonth(emp);
     await expect(q(`select run_payroll($1, $2)`, [company, OCT])).rejects.toThrow(/Lock attendance/);
     const run = await runPayroll();
-    await expect(q(`select approve_payroll($1)`, [run])).rejects.toThrow(/someone else must approve/);
+    // HR / Payroll prepares but can't approve; the Owner approves (SAL-09)
+    await expect(q(`select approve_payroll($1)`, [run])).rejects.toThrow(/Only the Owner or a Company Admin/);
     await approve(run);
     await expect(q(`update payslips set net_pay = 1 where run_id = $1`, [run])).rejects.toThrow(/finalized/);
     await q(`update payslips set payment_status = 'paid' where run_id = $1`, [run]);
     await expect(q(`select run_payroll($1, $2)`, [company, OCT])).rejects.toThrow(/reopen/);
-    await expect(q(`select unlock_attendance_month($1, $2, 'Late correction')`, [company, OCT])).rejects.toThrow(/reopen payroll instead/);
+    // only a Company Admin unlocks attendance (ATT-15), and not under an approved payroll
+    const admin = await addMember(db, company, "admin@acme.in", "company_admin");
+    await expect(asOwnerUser(db, admin, () => db.query(`select unlock_attendance_month($1, $2, 'Late correction')`, [company, OCT]))).rejects.toThrow(/reopen payroll instead/);
+    await expect(q(`select unlock_attendance_month($1, $2, 'Late correction')`, [company, OCT])).rejects.toThrow(/company administrator can unlock/);
     await expect(asOwnerUser(db, approver, () => db.query(`select approve_payroll($1)`, [run]))).rejects.toThrow(/draft/);
-    await expect(q(`select reopen_payroll($1, 'Wrong OT hours', '2026-09')`, [run])).rejects.toThrow(/Type 2026-10 to confirm/);
-    await expect(asOwnerUser(db, approver, () => db.query(`select reopen_payroll($1, 'x', '2026-10')`, [run]))).rejects.toThrow(/owner or a company administrator/);
-    await q(`select reopen_payroll($1, 'Wrong OT hours', '2026-10')`, [run]);
+    await expect(asOwnerUser(db, approver, () => db.query(`select reopen_payroll($1, 'Wrong OT hours', '2026-09')`, [run]))).rejects.toThrow(/Type 2026-10 to confirm/);
+    await expect(q(`select reopen_payroll($1, 'x', '2026-10')`, [run])).rejects.toThrow(/owner or a company administrator/);
+    await asOwnerUser(db, approver, () => db.query(`select reopen_payroll($1, 'Wrong OT hours', '2026-10')`, [run]));
     const locks = await q(`select * from attendance_locks where company_id = $1`, [company]);
     expect(locks).toHaveLength(0);
   });

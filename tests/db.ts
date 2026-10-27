@@ -67,3 +67,10 @@ export async function asOwnerUser<T>(db: PGlite, userId: string, fn: () => Promi
     await db.exec(`select set_config('request.jwt.claim.sub', '', false);`);
   }
 }
+
+/** Adds a company member with the given role (test setup, bypassing RLS) and returns their user id. */
+export async function addMember(db: PGlite, companyId: string, email: string, role: string) {
+  const id = await createUser(db, email);
+  await db.query(`insert into public.company_members (company_id, user_id, role) values ($1, $2, $3)`, [companyId, id, role]);
+  return id;
+}
