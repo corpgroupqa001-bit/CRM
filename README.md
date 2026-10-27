@@ -30,7 +30,6 @@ This is the **MVP scope**: sign-up/login (AUTH), companies and projects (COM), e
 
 | Setting (`.env.local`) | What it does |
 |---|---|
-| `EMAIL_VERIFICATION=off` | Current default. Accounts are created with a password and no verification email (sign-up never creates a company; the Super Admin does, in `/admin`). Because these emails are unverified, sign-up never links to an invited employee record. HR can set or reset any employee's password (Employee → Lifecycle). Set `on` once SMTP works to require emailed codes / verify links |
 | `NEXT_PUBLIC_GOOGLE_AUTH=on` | Shows "Continue with Google" (enable the Google provider in Supabase → Authentication first; redirect URL `<app>/auth/callback`) |
 | VAPID keys + `PUSH_WEBHOOK_SECRET` | Web push. In Supabase → Database → Webhooks, add a webhook on **INSERT into `notifications`** → POST `<app>/api/push/dispatch` with header `x-webhook-secret: <PUSH_WEBHOOK_SECRET>` |
 | `CRON_SECRET` | Protects `/api/cron/reports` (scheduled report emails, run daily by `vercel.json`) |
@@ -72,7 +71,7 @@ update platform_features set enabled = true where feature = 'leave';
 
 Every verification email (sign-up, login, reset, invite, change of email) contains **a 6-digit code and a one-click "Verify email" button**. Both come from one record: valid 10 minutes, single use, and a resend replaces them. The button opens `/verify/confirm`, and the user confirms with one click there, so link scanners in mail clients can't use up the token.
 
-Sending uses Nodemailer over SMTP. With `SMTP_HOST` empty, emails are printed in the `pnpm dev` terminal. To send real mail, fill `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `MAIL_FROM` in `.env.local`. For example, Gmail uses `smtp.gmail.com` / port 587 with an App Password, and Brevo uses `smtp-relay.brevo.com` / port 587 with an SMTP key. Then check the settings:
+Sending uses Nodemailer over SMTP. With `SMTP_HOST` empty, development servers (`pnpm dev`, `pnpm staging:dev`) print each email, code included, in the terminal; a production server refuses to send and shows an error, so set SMTP before going live. To send real mail, fill `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `MAIL_FROM` in `.env.local`. For example, Gmail uses `smtp.gmail.com` / port 587 with an App Password, and Brevo uses `smtp-relay.brevo.com` / port 587 with an SMTP key. Then check the settings:
 
 ```bash
 pnpm email:test you@example.com   # connects, logs in, sends a test email, explains any failure
@@ -111,7 +110,7 @@ Every change is tried on a separate Supabase project first; `main` is live.
 ## Tests
 
 ```bash
-pnpm test        # 233 tests, no Docker or hosted database needed
+pnpm test        # 234 tests, no Docker or hosted database needed
 pnpm lint && pnpm typecheck && pnpm build
 ```
 The tests load the **real migrations** into PGlite (Postgres compiled to WASM). They cover:

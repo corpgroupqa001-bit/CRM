@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Field } from "@/components/ui";
-import { emailVerificationOn } from "@/lib/auth/config";
 import { loginOtpStart, loginPassword, switchAccount } from "../actions";
 import { GoogleButton } from "@/components/google-button";
 import { joinOptions } from "@/lib/join";
@@ -20,7 +19,7 @@ export type Portal = "company" | "hr";
 export async function CompanySignIn({ mode, next, pending, portal = "company", base = "/login" }:
   { mode?: string; next?: string; pending?: string; portal?: Portal; base?: string }) {
   const hr = portal === "hr";
-  const codes = emailVerificationOn() && !hr;
+  const codes = !hr;   // AUTH-03 email-code sign-in (the HR portal uses the password sign-in)
   const otp = codes && mode === "otp";
   // the registered companies, read from the database (same list as sign-up)
   const { companies } = await joinOptions();

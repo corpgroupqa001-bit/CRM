@@ -28,13 +28,3 @@ export async function joinOptions(companyId?: string | null): Promise<JoinOption
   const designations = (desigs ?? []).filter((g) => departments.some((d) => d.id === g.department_id)) as JoinOptions["designations"];
   return { companies: companies ?? [], company, designations, departments };
 }
-
-export type JoinStatus = { status: "pending" | "approved" | "rejected"; company: string; decision_note: string | null } | null;
-
-/** the most recent join request of an account, for the sign-in gate and the "no company yet" page */
-export async function latestJoinRequest(userId: string): Promise<JoinStatus> {
-  const { data } = await createAdminClient().from("join_requests").select("status, decision_note, companies(name)")
-    .eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (!data) return null;
-  return { status: data.status as "pending", company: (data.companies as unknown as { name: string } | null)?.name ?? "", decision_note: data.decision_note };
-}

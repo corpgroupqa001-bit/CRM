@@ -6,10 +6,10 @@ import { Avatar, Badge, Card, Field, PageHeader, Table, Tabs } from "@/component
 import { fmtDate, fmtDateTime, label, money } from "@/lib/format";
 import { fullName } from "@/lib/employees";
 import {
-  documentUrl, inviteEmployee, issueAsset, lifecycle, mapDevice, removeEmployee, returnAsset, saveStatutory, setEmployeePassword, toggleChecklist,
+  documentUrl, inviteEmployee, issueAsset, lifecycle, mapDevice, removeEmployee, returnAsset, saveStatutory, toggleChecklist,
   transferCompany, unlockLogin, unmapDevice, updateEmployee,
 } from "../actions";
-import { isLockedOut, PASSWORD_RULE } from "@/lib/auth/session";
+import { isLockedOut } from "@/lib/auth/session";
 import { JobFields, PersonalFields, StatutoryFields, jobOptions } from "../form-fields";
 import { CompaniesTab } from "./companies-tab";
 
@@ -243,12 +243,6 @@ export default async function EmployeePage({ params, searchParams }: { params: P
           <ActionForm action={removeEmployee.bind(null, cid, eid)} className="space-y-2" confirm="Remove this employee? They lose access straight away.">
             <input name="note" className="input" placeholder="Reason (optional)" />
             <SubmitButton className="btn-danger">Remove employee</SubmitButton>
-          </ActionForm>
-        </Card>}
-        {acct && <Card title="Login password" description={e.user_id ? "Set a new password if they're locked out." : "Not activated yet: setting a password creates their login now."}>
-          <ActionForm action={setEmployeePassword.bind(null, cid, eid)} className="space-y-3" resetOnSuccess>
-            <Field label="New password" hint={PASSWORD_RULE}><input className="input" name="password" type="text" autoComplete="off" minLength={8} required /></Field>
-            <SubmitButton className="btn-secondary">{e.user_id ? "Set password" : "Create login"}</SubmitButton>
           </ActionForm>
         </Card>}
         {acct && e.user_id && <Card title="Sign-in" description="Five wrong passwords in 15 minutes lock the login for 15 minutes.">

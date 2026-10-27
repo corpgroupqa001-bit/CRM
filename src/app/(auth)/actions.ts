@@ -11,10 +11,8 @@ import {
   signInVerifiedEmail, validPassword,
 } from "@/lib/auth/session";
 import { errorMessage, str, type ActionState } from "@/lib/actions";
-import { emailVerificationOn } from "@/lib/auth/config";
 import { linkInvitedEmployee } from "@/lib/auth/accounts";
 import { syncMfaFlag } from "@/lib/auth/guard";
-import { latestJoinRequest } from "@/lib/join";
 import { COMPANY_LOCK_COOKIE, lockCookieOptions, sessionIdOf, signCompanyLock } from "@/lib/auth/company-lock";
 import { companyAccessError, companyLanding, UUID_RE, type Access } from "@/lib/auth/company-login";
 
@@ -60,7 +58,6 @@ export async function signupStart(_: ActionState, fd: FormData): Promise<ActionS
   if (!name || !EMAIL_RE.test(email)) return { error: "Enter your name and a valid email." };
   if (!company) return { error: "Enter your company's name." };
   if (fd.get("consent") !== "on") return { error: "Please agree to the privacy notice to continue." };
-  if (!emailVerificationOn()) return signupWithPassword(name, email, company, fd);
   try {
     if (await findUserByEmail(email)) return { error: "An account with this email already exists. Sign in instead." };
     await sendCode(email, "signup", { name, company });
@@ -68,28 +65,6 @@ export async function signupStart(_: ActionState, fd: FormData): Promise<ActionS
     return otpError(err);
   }
   redirect(verifyUrl(email, "signup"));
-}
-
-// verification off: create the account with a password, create the company and sign in
-async function signupWithPassword(name: string, email: string, company: string, fd: FormData): Promise<ActionState> {
-  const password = String(fd.get("password") ?? "");
-  if (!validPassword(password)) return { error: PASSWORD_RULE };
-  if (password !== String(fd.get("confirm") ?? "")) return { error: "The passwords don't match." };
-  let userId: string | undefined;
-  let cid: string;
-  try {
-    if (await findUserByEmail(email)) return { error: "An account with this email already exists. Sign in instead." };
-    const user = await createPasswordUser(email, password, name);
-    userId = user.id;
-    await initProfile(user.id, name);
-    cid = await createCompanyFor(user.id, company);
-    await signInWithPassword(email, password, "signup");
-  } catch (err) {
-    // don't leave an account behind without its company
-    if (userId) await createAdminClient().auth.admin.deleteUser(userId);
-    return { error: errorMessage(err) };
-  }
-  redirect(`/c/${cid}/dashboard`);
 }
 
 async function createCompanyFor(userId: string, name: string): Promise<string> {
@@ -110,38 +85,6 @@ export async function createCompany(_: ActionState, fd: FormData): Promise<Actio
   redirect(`/c/${data}/dashboard`);
 }
 
-/**
- * Sign-in gate for candidates: an account with no company that is waiting for approval (or was
- * not approved) is signed straight back out. Returns the message to show, or null to continue.
- */
-async function approvalGate(userId: string): Promise<string | null> {
-  const admin = createAdminClient();
-  const [{ count }, { data: sa }] = await Promise.all([
-    admin.from("company_members").select("company_id", { count: "exact", head: true }).eq("user_id", userId).eq("active", true),
-    admin.from("platform_admins").select("user_id").eq("user_id", userId).maybeSingle(),
-  ]);
-  if (count || sa) return null;
-  const req = await latestJoinRequest(userId);
-  if (req?.status === "pending") return `Your request to join ${req.company} is waiting for an administrator to approve it. You can sign in once it's approved.`;
-  if (req?.status === "rejected") return `Your request to join ${req.company} was not approved${req.decision_note ? `: ${req.decision_note}` : ""}. Contact the company administrator.`;
-  return null;
-}
-
-async function createPasswordUser(email: string, password: string, fullName?: string) {
-  const { data, error } = await createAdminClient().auth.admin.createUser({
-    email, password, email_confirm: true, user_metadata: fullName ? { full_name: fullName } : undefined,
-  });
-  if (error) throw error;
-  return data.user;
-}
-
-async function signInWithPassword(email: string, password: string, method: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  await recordLogin(data.user.id, method);
-}
-
 /** Consent and display name for a new account. Its company comes from owner sign-up (create_company_for)
  * or, for employees, from an invitation. */
 async function initProfile(userId: string, name: string) {
@@ -150,7 +93,6 @@ async function initProfile(userId: string, name: string) {
 
 // AUTH-03 passwordless login
 export async function loginOtpStart(_: ActionState, fd: FormData): Promise<ActionState> {
-  if (!emailVerificationOn()) return { error: "Sign-in by email code is turned off. Use your password." };
   const email = normaliseEmail(str(fd, "email") ?? "");
   if (!EMAIL_RE.test(email)) return { error: "Enter a valid email." };
   try {
@@ -164,7 +106,6 @@ export async function loginOtpStart(_: ActionState, fd: FormData): Promise<Actio
 
 // AUTH-05 forgot password
 export async function forgotStart(_: ActionState, fd: FormData): Promise<ActionState> {
-  if (!emailVerificationOn()) return { error: "Password reset by email is turned off. Ask your company admin to set a new password for you." };
   const email = normaliseEmail(str(fd, "email") ?? "");
   if (!EMAIL_RE.test(email)) return { error: "Enter a valid email." };
   try {
@@ -183,21 +124,11 @@ export async function activateStart(_: ActionState, fd: FormData): Promise<Actio
       .in("status", ["active", "notice"]).is("user_id", null).limit(1);
     if (!data?.length) return { error: "We couldn't find a pending invitation for this email. Ask HR to add you, or sign in if you already activated." };
     if (fd.get("consent") !== "on") return { error: "Please agree to the privacy notice to continue." };
-    if (!emailVerificationOn()) {
-      const password = String(fd.get("password") ?? "");
-      if (!validPassword(password)) return { error: PASSWORD_RULE };
-      if (password !== String(fd.get("confirm") ?? "")) return { error: "The passwords don't match." };
-      const user = (await findUserByEmail(email)) ?? (await createPasswordUser(email, password));
-      await createAdminClient().auth.admin.updateUserById(user.id, { password });
-      await linkInvitedEmployee(user.id, email);
-      await signInWithPassword(email, password, "invite");
-    } else {
-      await sendCode(email, "invite");
-    }
+    await sendCode(email, "invite");
   } catch (err) {
     return otpError(err);
   }
-  redirect(emailVerificationOn() ? verifyUrl(email, "invite") : "/");
+  redirect(verifyUrl(email, "invite"));
 }
 
 export async function resendCode(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -310,11 +241,6 @@ export async function loginPassword(_: ActionState, fd: FormData): Promise<Actio
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     await recordAttempt(email, !error);
     if (error) return { error: "Incorrect email or password." };
-    const blocked = await approvalGate(data.user.id);
-    if (blocked) {
-      await supabase.auth.signOut({ scope: "local" });   // only the session just created here
-      return { error: blocked };
-    }
     // the selected company is checked on the server, as the signed-in user (RLS helpers, not the form)
     const { data: access, error: accessError } = await supabase.rpc("my_access", { cid: company });
     let denied = accessError ? "Couldn't check your access. Try again." : companyAccessError(access as Access);
@@ -366,13 +292,6 @@ export async function changeEmailStart(_: ActionState, fd: FormData): Promise<Ac
   if (!user) redirect("/login");
   try {
     if (await findUserByEmail(newEmail)) return { error: "That email is already used by another account." };
-    if (!emailVerificationOn()) {
-      const admin = createAdminClient();
-      const { error } = await admin.auth.admin.updateUserById(user.id, { email: newEmail, email_confirm: true });
-      if (error) throw error;
-      await admin.from("employees").update({ email: newEmail }).eq("user_id", user.id);
-      return { ok: "Your email address has been changed." };
-    }
     await sendCode(newEmail, "change_email", { new_email: newEmail, user_id: user.id });
   } catch (err) {
     return otpError(err);

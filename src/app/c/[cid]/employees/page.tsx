@@ -42,16 +42,12 @@ export default async function Employees({ params, searchParams }: { params: Prom
         .select("id, date_of_joining").in("id", ids)
     : { data: [] };
   const doj = new Map((joined ?? []).map((j) => [j.id, j.date_of_joining]));
-  const { count: signups } = perms.has("employees.account")
-    ? await supabase.from("join_requests").select("id", { count: "exact", head: true }).eq("company_id", cid).eq("status", "pending")
-    : { count: 0 };
   const qs = (p: number) => `?${new URLSearchParams({ ...sp, page: String(p) } as Record<string, string>)}`;
 
   return (
     <>
       <PageHeader title="Employees" subtitle={`${count ?? 0} ${sp.status || "active"} employee(s)`}
         actions={<>
-          {perms.has("employees.account") && <Link href={`/c/${cid}/employees/approvals`} className="btn-secondary">Sign-up approvals{(signups ?? 0) > 0 && <> <Badge value="pending" text={String(signups)} /></>}</Link>}
           {perms.has("employees.update") && (pending ?? 0) > 0 && <Link href={`/c/${cid}/employees/requests`} className="btn-secondary">Change requests <Badge value="pending" text={String(pending)} /></Link>}
           {(perms.has("employees.read_all") || perms.has("employees.read_team")) && <Link href={`/c/${cid}/employees/org`} className="btn-secondary">Org chart</Link>}
           {perms.has("employees.read_all") && <a href={`/api/export/employees?company=${cid}`} className="btn-secondary">Export</a>}

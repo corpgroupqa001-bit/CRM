@@ -4,7 +4,7 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Badge, Card, Field, PageHeader, Table, Tabs } from "@/components/ui";
 import { fmtDate, fmtDateTime, label } from "@/lib/format";
 import { ASSIGNABLE_ROLES, ROLE_LABEL, type Role } from "@/lib/rbac";
-import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, setMemberRole } from "./actions";
+import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, setMemberRole } from "./actions";
 
 export const metadata = { title: "Settings" };
 
@@ -193,10 +193,10 @@ export default async function Settings({ params, searchParams }: { params: Promi
   if (tab === "org") {
     const [{ data: depRows }, { data: desigRows }] = await Promise.all([
       supabase.from("departments").select("id, name, active").eq("company_id", cid).order("name"),
-      supabase.from("designations").select("id, name, active, department_id, access_role").eq("company_id", cid).order("name"),
+      supabase.from("designations").select("id, name, active, department_id").eq("company_id", cid).order("name"),
     ]);
     type Dep = { id: string; name: string; active: boolean };
-    type Desig = Dep & { department_id: string | null; access_role: string | null };
+    type Desig = Dep & { department_id: string | null };
     const deps = (depRows ?? []) as Dep[];
     const desigs = (desigRows ?? []) as Desig[];
     const activeDeps = deps.filter((d) => d.active);
@@ -208,7 +208,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
     const status = (r: Dep) => !r.active && <Badge value="inactive" text="Inactive" />;
 
     const departmentsCard = (
-      <Card title="Departments" description="Candidates choose a department first, then one of its designations. Deactivating hides a department from sign-up and pickers; employees keep it.">
+      <Card title="Departments" description="Designations sit under a department: pick the department first, then one of its designations. Deactivating hides a department from pickers; employees keep it.">
         <ul className="mb-4 divide-y divide-slate-100">
           {deps.map((d) => (
             <li key={d.id} className="flex items-center gap-2 py-2">
@@ -242,7 +242,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             <div key={g.key}>
               <h4 className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {g.title}{g.dep && status(g.dep)}
-                {!g.dep && <span className="font-normal normal-case text-amber-700">Not offered at sign-up until a department is chosen</span>}
+                {!g.dep && <span className="font-normal normal-case text-amber-700">Choose a department for it</span>}
                 {g.dep && !g.dep.active && <span className="font-normal normal-case text-slate-500">Not offered while the department is inactive</span>}
               </h4>
               <ul className="divide-y divide-slate-100">
@@ -275,27 +275,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
         </ActionForm>
       </Card>
     );
-    // designation → access role (Administrators): what a candidate with this designation gets on approval
-    const canMap = perms.has("employees.assign_role");
-    const access = canMap && (
-      <Card title="Access by designation" className="md:col-span-2"
-        description="When a new candidate signs up with a designation, the administrator approving them starts from this role (and can change it). A designation never grants access without that approval.">
-        <Table head={["Designation", "Department", "Access role on approval"]} empty="Add designations above first.">
-          {desigs.filter((d) => d.active).map((d) => (
-            <tr key={d.id}><td className="td font-medium">{d.name}</td>
-              <td className="td text-slate-500">{deps.find((x) => x.id === d.department_id)?.name ?? "—"}</td>
-              <td className="td"><ActionForm action={setDesignationAccess.bind(null, cid, d.id)} className="flex flex-wrap items-center gap-2 [&>p]:basis-full">
-                <select name="access_role" defaultValue={d.access_role ?? ""} className="input h-8 w-48 text-sm">
-                  <option value="">Not set (administrator chooses)</option>
-                  {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-                </select>
-                <SubmitButton className="btn-secondary btn-sm">Save</SubmitButton>
-              </ActionForm></td></tr>
-          ))}
-        </Table>
-      </Card>
-    );
-    body = <div className="grid gap-6 md:grid-cols-2">{departmentsCard}{designationsCard}{access}</div>;
+    body = <div className="grid gap-6 md:grid-cols-2">{departmentsCard}{designationsCard}</div>;
   }
 
   if (tab === "calendar") {

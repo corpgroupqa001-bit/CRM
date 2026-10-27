@@ -236,7 +236,7 @@ export async function approveRun(cid: string, runId: string, _: ActionState): Pr
 |---|---|---|
 | Session | Supabase JWT (access + refresh) in cookies. Verified locally with `getClaims()` (asymmetric ES256 keys), so it costs no network call | `middleware.ts`, `lib/auth/guard.ts` |
 | Sign-up / invite / reset | Our own **email OTP**: a 6-digit code **and** a one-click link from one record. Hashed with `OTP_PEPPER`, 10-minute expiry, single use, 5 attempts, 60 s resend cooldown, 5 per hour per email and IP | `lib/auth/otp.ts` (pure, unit-tested), `lib/auth/otp-store.ts` (table `otp_codes`) |
-| Verification switch | `EMAIL_VERIFICATION=off` (current default): accounts are created and activated with a password, no email. `on`: the OTP flows above are required | `lib/auth/config.ts` |
+| Email verification | Always on (BRD AUTH-01/03/04/05/13): owner sign-up, employee activation, sign-in by code, password reset and change of email go through a 6-digit emailed code. No administrator approval of sign-ups. Without SMTP, development servers print the email to the server log; production refuses to send and shows an error |
 | Turning a verified email into a session | Server generates a magic-link token with the admin API and verifies it immediately | `lib/auth/session.ts → signInVerifiedEmail()` |
 | Password rules + lockout | 8+ characters with a number and a special character. 5 failures in 15 minutes lock the account | `lib/auth/session.ts`, table `login_attempts` |
 | Company at sign-in | The password sign-in form has a required **Company** dropdown (active companies from the database). After the password check the server calls `my_access(company)` as the signed-in user; anything but `allowed` signs the user straight out ("no access to the selected company" / "inactive", never naming other companies). On success the company lock cookie unlocks exactly that company and the user lands on its dashboard | `app/(auth)/actions.ts → loginPassword`, `lib/auth/company-login.ts`, `lib/auth/company-lock.ts` |
@@ -468,7 +468,6 @@ All settings are environment variables. Copy `.env.example` to `.env.local`.
 | `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_APP_NAME` | yes | Used in emails and links |
 | `OTP_PEPPER` | yes | `openssl rand -hex 32` |
 | `FIELD_ENCRYPTION_KEY` | yes | `openssl rand -base64 32`. **Losing it makes stored PAN / Aadhaar / bank unreadable** |
-| `EMAIL_VERIFICATION` | no | `off` (default) or `on` |
 | `SMTP_*`, `MAIL_FROM` | for email | Empty `SMTP_HOST` prints emails to the dev console. Test with `pnpm email:test you@example.com` |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `PUSH_WEBHOOK_SECRET` | for push | Plus the Supabase DB webhook on `notifications` INSERT |
 | `CRON_SECRET` | for reports | Protects `/api/cron/*` |
