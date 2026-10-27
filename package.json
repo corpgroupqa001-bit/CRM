@@ -14,7 +14,10 @@
     "functions:deploy": "npx supabase functions deploy punch-webhook --no-verify-jwt",
     "email:test": "tsx scripts/email-test.ts",
     "archive:punches": "tsx scripts/archive-punches.ts",
-    "dev:webpack": "next dev"
+    "dev:webpack": "next dev",
+    "staging:db": "node scripts/staging.mjs db",
+    "staging:seed": "node scripts/staging.mjs seed",
+    "staging:dev": "node scripts/staging.mjs dev"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "2.11.1",
