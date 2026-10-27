@@ -66,7 +66,7 @@ describe("ATT-23/27/28/32/33: check-in, breaks, check-out on the server clock", 
     expect((await status("ravi")).state).toBe("break");
     await expect(as("ravi", `select wfh_break($1, true)`, [cid])).rejects.toThrow(/already on a break/);
     await as("ravi", `select wfh_break($1, false)`, [cid]);
-    await as("ravi", `select wfh_check_out($1, $2)`, [cid, `${cid}/${E.ravi}/out.jpg`]);
+    await as("ravi", `select wfh_check_out($1, $2, 'Network down at home')`, [cid, `${cid}/${E.ravi}/out.jpg`]);   // early: a reason (0044)
     await expect(as("ravi", `select wfh_check_in($1, $2, 'x', null, null)`, [cid, `${cid}/${E.ravi}/in2.jpg`]))
       .rejects.toThrow(/already checked out today/);
     expect((await status("ravi")).state).toBe("out");
@@ -96,6 +96,38 @@ describe("ATT-23/27/28/32/33: check-in, breaks, check-out on the server clock", 
     await sys(`select compute_attendance_day($1, '2026-10-20')`, [E.sita]);
     expect(await sys(`select status, worked_minutes from daily_attendance where employee_id = $1 and date = '2026-10-20'`, [E.sita]))
       .toEqual([{ status: "wfh", worked_minutes: 495 }]);                                  // 8 h 15 m → a full payable day
+  });
+});
+
+describe("checking out early (decision of 27 Oct, 0044)", () => {
+  it("before the target a reason is required, saved, shown to the manager and the manager is told", async () => {
+    await sys(`update employees set reporting_manager_id = $1 where id = $2`, [E.manager, E.sita]);
+    await sys(`insert into wfh_days (company_id, employee_id, date, status, source) values ($1, $2, $3::date, 'approved', 'hr') on conflict (employee_id, date) do update set status = 'approved'`, [cid, E.sita, await today()]);
+    await as("sita", `select wfh_check_in($1, null, 'x', null, null)`, [cid]);
+    await expect(as("sita", `select wfh_check_out($1, null)`, [cid])).rejects.toThrow(/give a reason for leaving early/);
+    await expect(as("sita", `select wfh_check_out($1, null, '  ')`, [cid])).rejects.toThrow(/give a reason for leaving early/);
+    expect((await status("sita")).state).toBe("in");                                          // still working
+    await sys(`delete from notifications`);
+    await as("sita", `select wfh_check_out($1, null, 'Doctor''s appointment')`, [cid]);
+    expect((await status("sita")).state).toBe("out");
+    expect(await sys(`select early_reason from work_sessions where employee_id = $1 and date = $2::date`, [E.sita, await today()])).toEqual([{ early_reason: "Doctor's appointment" }]);
+    const [n] = await sys<{ user_id: string; title: string; body: string }>(`select user_id, title, body from notifications`);
+    expect(n.user_id).toBe(U.manager);
+    expect(n.title).toBe("Early check-out");
+    expect(n.body).toMatch(/^sita checked out \d+ h \d+ min early: Doctor's appointment$/);
+    const live = await as<{ full_name: string; early_reason: string | null }>("manager", `select full_name, early_reason from wfh_live($1) where full_name = 'sita'`, [cid]);
+    expect(live).toEqual([{ full_name: "sita", early_reason: "Doctor's appointment" }]);
+    await sys(`update employees set reporting_manager_id = null where id = $1`, [E.sita]);
+  });
+
+  it("after the target, no reason is asked and nobody is notified", async () => {
+    const d = await today();
+    await sys(`insert into wfh_days (company_id, employee_id, date, status, source) values ($1, $2, $3::date, 'approved', 'hr')`, [cid, E.manager, d]);
+    await sys(`insert into work_sessions (company_id, employee_id, date, started_at) values ($1, $2, $3::date, now() - interval '9 hours')`, [cid, E.manager, d]);
+    await sys(`delete from notifications`);
+    await as("manager", `select wfh_check_out($1, null)`, [cid]);
+    expect(await sys(`select early_reason from work_sessions where employee_id = $1 and date = $2::date`, [E.manager, d])).toEqual([{ early_reason: null }]);
+    expect(await sys(`select * from notifications where title = 'Early check-out'`)).toHaveLength(0);
   });
 });
 

@@ -114,14 +114,20 @@ export function WfhPanel({ cid, employeeId, initial, compact = false }: { cid: s
       {st.capture_gps && st.state === "out" && <p className="flex items-center gap-1.5 text-xs text-slate-500"><MapPin className="h-3.5 w-3.5" /> Your company records your location when you check in.</p>}
       {msg?.error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{msg.error}</p>}
       {msg?.ok && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{msg.ok}</p>}
-      {camera && <SelfieCapture cid={cid} kind={camera} gps={st.capture_gps} onDone={async (r) => { setCamera(null); setMsg(r); await refresh(); }} onCancel={() => setCamera(null)} />}
+      {camera && <SelfieCapture cid={cid} kind={camera} gps={st.capture_gps} onDone={async (r) => { setCamera(null); setMsg(r); await refresh(); }} onCancel={() => setCamera(null)}
+        early={camera === "out" && left > 0 ? { worked, target: st.target_seconds } : null} />}
     </div>
   );
 }
 
 // ATT-23: a selfie from the live camera only (no gallery upload); ATT-27: if the camera can't be used,
 // the check-in still goes through and is flagged "photo missing".
-function SelfieCapture({ cid, kind, gps, onDone, onCancel }: { cid: string; kind: "in" | "out"; gps: boolean; onDone: (r: ActionState) => void; onCancel: () => void }) {
+// Checking out before the target (decision of 27 Oct 2026, 0044): the time left is shown and a reason is
+// required; the server checks it again and tells the reporting manager.
+function SelfieCapture({ cid, kind, gps, onDone, onCancel, early }: {
+  cid: string; kind: "in" | "out"; gps: boolean; onDone: (r: ActionState) => void; onCancel: () => void;
+  early: { worked: number; target: number } | null;
+}) {
   const action = kind === "in" ? wfhCheckIn.bind(null, cid) : wfhCheckOut.bind(null, cid);
   const [state, formAction, pending] = useActionState(action, null);
   const video = useRef<HTMLVideoElement>(null);
@@ -158,6 +164,19 @@ function SelfieCapture({ cid, kind, gps, onDone, onCancel }: { cid: string; kind
 
   return (
     <form action={submit} className="space-y-3 rounded-xl border border-slate-200 p-3">
+      {early && (
+        <div role="alert" className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+          <p className="font-semibold">⚠️ You&apos;re checking out early</p>
+          <dl className="grid grid-cols-3 gap-2 text-center text-sm">
+            <div><dt className="text-xs">Worked today</dt><dd className="font-semibold tabular-nums">{hms(early.worked)}</dd></div>
+            <div><dt className="text-xs">Target</dt><dd className="font-semibold tabular-nums">{hms(early.target)}</dd></div>
+            <div><dt className="text-xs">Left to target</dt><dd className="font-semibold tabular-nums">{hms(early.target - early.worked)}</dd></div>
+          </dl>
+          <p className="text-sm">Checking out ends your work-from-home day: you can&apos;t check in again today.</p>
+          <label className="block text-sm font-medium">Reason for leaving early
+            <textarea name="reason" required minLength={3} maxLength={300} rows={2} className="input mt-1" placeholder="e.g. Doctor's appointment" /></label>
+        </div>
+      )}
       <div className="text-sm font-semibold text-slate-900">{kind === "in" ? "Check-in selfie" : "Check-out selfie"}</div>
       {!noCamera ? (
         <div className="overflow-hidden rounded-xl bg-black">
@@ -170,7 +189,7 @@ function SelfieCapture({ cid, kind, gps, onDone, onCancel }: { cid: string; kind
         {!noCamera && (!shot
           ? <button type="button" className="btn-secondary flex-1" onClick={capture} disabled={!stream}><Camera className="h-4 w-4" /> Take selfie</button>
           : <button type="button" className="btn-secondary flex-1" onClick={() => setShot(null)}>Retake</button>)}
-        <button className="btn-primary flex-1" disabled={pending || (!shot && !noCamera)}>{pending ? "Saving…" : kind === "in" ? "Check in" : "Check out"}</button>
+        <button className="btn-primary flex-1" disabled={pending || (!shot && !noCamera)}>{pending ? "Saving…" : kind === "in" ? "Check in" : early ? "Check out early" : "Check out"}</button>
       </div>
       <button type="button" className="btn-ghost btn-sm w-full" onClick={onCancel}>Cancel</button>
     </form>

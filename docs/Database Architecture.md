@@ -102,6 +102,7 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0041 | `lockout_minutes` | BRD AUTH-02: `companies.lockout_minutes` (15 default, 30, 60 or 1440), set by the Company Admin in Settings → Policies; the longest among a login's companies applies (`src/lib/auth/lockout.ts`); Owner, Company Admin and HR unlock from the employee's Lifecycle tab |
 | 0042 | `who_is_in` | Decision of 27 Oct 2026 (beyond BRD §5.3): `who_is_in(company)` gives every member each colleague's name, code, photo and present yes/no for today (Present, Late, Early-out, Half-day, On Duty, WFH = in); never the reason; daily_attendance RLS unchanged. Dashboard → "Who's in today" for roles without `attendance.read_all` |
 | 0043 | `wfh_one_session` | Decision of 27 Oct 2026, against BRD ATT-32: `wfh_check_in` refuses a second check-in on a day that already has a closed session; a mistaken check-out is fixed by a correction request (ATT-13) |
+| 0044 | `wfh_early_checkout` | Decision of 27 Oct 2026: `work_sessions.early_reason`; `wfh_check_out(company, selfie, reason)` requires a reason when worked time is below the shift's full-day hours, saves it, and notifies the reporting manager ("Early check-out"); `wfh_live` returns `early_reason` for the manager / HR board |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

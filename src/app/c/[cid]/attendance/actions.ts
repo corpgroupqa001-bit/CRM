@@ -219,7 +219,7 @@ export async function wfhCheckIn(cid: string, _: ActionState, fd: FormData): Pro
 export async function wfhCheckOut(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
   return attempt(async () => {
     const { supabase, path } = await uploadWorkSelfie(cid, fd, "out");
-    must(await supabase.rpc("wfh_check_out", { p_company: cid, p_selfie_path: path }));
+    must(await supabase.rpc("wfh_check_out", { p_company: cid, p_selfie_path: path, p_reason: str(fd, "reason") }));
     rv(cid);
     return "Checked out.";
   });
