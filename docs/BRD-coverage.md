@@ -3,7 +3,7 @@
 Checked against *BRD – CRM & Workforce Management Platform* **v2.0** (26 Oct 2026), 27 Oct 2026, after migrations 0027–0030.
 ✅ built · ◐ built with a stated limit · ✗ not built (with reason)
 
-Database rules marked † are covered by automated tests (`pnpm test`, 228 tests on the real migrations).
+Database rules marked † are covered by automated tests (`pnpm test`, 229 tests on the real migrations).
 
 ## AUTH — sign-up / login
 | ID | Status | Where / note |
@@ -44,7 +44,7 @@ EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles
 | ATT-03 … ATT-16 | ✅† | device registry + offline alert, immutable idempotent punches, exceptions queue, shifts, statuses, OT, late rule, field selfie + geofence, regularisation, live board, month lock (Company Admin unlocks), reports |
 | ATT-17 … ATT-19 leave | ✅† | switched on (0027) |
 | ATT-20 … ATT-35 work from home | ✅† | 0030: requests / approvals / HR ranges, eligibility, live-camera selfie check-in/out, breaks, server time, live timer (home + My attendance) and team board via Realtime, auto-close, WFH report. GPS only when enabled |
-| ATT-25 selfie access + retention | ✅ | HR / Payroll and the reporting manager; deleted after the company retention (default 90 days) by `/api/cron/retention` |
+| ATT-25 selfie access + retention | ✅ | visible only to HR / Payroll and the reporting manager (employee attendance page → Selfies); deleted after the company retention (default 90 days) by `/api/cron/retention`. **Addition by decision (27 Oct):** they can flag a selfie (wrong person / place); the employee explains; HR or the manager accepts or upholds (0035) |
 | ATT-36 missed out-punch | ✅† | after shift end + company grace (default 2 h), unpaid until regularised, employee notified (0029) |
 
 ## SAL — payroll

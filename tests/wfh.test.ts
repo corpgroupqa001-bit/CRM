@@ -122,6 +122,28 @@ describe("ATT-21: on-site and field staff can't be marked as working from home",
   });
 });
 
+describe("Selfie flags (0035, decision 27 Oct): HR or the manager flags, the employee explains", () => {
+  it("only HR or the reporting manager flag; the employee is told and explains; then it is closed", async () => {
+    const [s] = await sys<{ id: string }>(`select id from work_sessions where employee_id = $1 and selfie_in is not null limit 1`, [E.ravi]);
+    await expect(as("sita", `select flag_selfie('wfh_in', $1, 'wrong_place', 'x')`, [s.id])).rejects.toThrow(/Only HR or the reporting manager/);
+    await expect(as("manager", `select flag_selfie('wfh_in', $1, 'wrong_place', '  ')`, [s.id])).rejects.toThrow(/Add a note/);
+    await sys(`delete from notifications`);
+    const [{ id }] = await as<{ id: string }>("manager", `select flag_selfie('wfh_in', $1, 'wrong_place', 'Looks like a cafe, not home') id`, [s.id]);
+    await expect(as("hr", `select flag_selfie('wfh_in', $1, 'other', 'again')`, [s.id])).rejects.toThrow(/already flagged/);
+    expect(await sys(`select title from notifications where user_id = $1`, [U.ravi])).toEqual([{ title: "Selfie flagged: please explain" }]);
+    expect(await as("ravi", `select reason, note, status from selfie_flags`)).toEqual([{ reason: "wrong_place", note: "Looks like a cafe, not home", status: "open" }]);
+    expect(await as("sita", `select * from selfie_flags`)).toHaveLength(0);
+    await expect(as("sita", `select explain_selfie_flag($1, 'not me')`, [id])).rejects.toThrow(/not allowed/);
+    await as("ravi", `select explain_selfie_flag($1, 'Power cut at home, worked from the cafe below')`, [id]);
+    expect(await sys(`select title from notifications where user_id = $1`, [U.manager])).toContainEqual({ title: "Selfie flag explained" });
+    await expect(as("ravi", `select close_selfie_flag($1, false, null)`, [id])).rejects.toThrow(/not allowed/);
+    await as("hr", `select close_selfie_flag($1, false, 'Fine this once')`, [id]);
+    expect(await sys(`select status from selfie_flags where id = $1`, [id])).toEqual([{ status: "accepted" }]);
+    expect((await sys<{ action: string }>(`select action from audit_log where table_name = 'selfie_flags' order by id`)).map((r) => r.action)).toEqual(["flag", "explain", "accept"]);
+    await expect(as("hr", `update selfie_flags set status = 'open' where id = $1 returning id`, [id])).resolves.toHaveLength(0);   // no direct writes
+  });
+});
+
 describe("ATT-25/30: who sees work-from-home figures", () => {
   it("the manager and HR see the live board; employees see only their own", async () => {
     const mine = await as<{ full_name: string }>("manager", `select * from wfh_live($1)`, [cid]);

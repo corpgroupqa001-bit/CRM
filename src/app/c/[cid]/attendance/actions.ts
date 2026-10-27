@@ -270,3 +270,28 @@ export async function assignWfh(cid: string, _: ActionState, fd: FormData): Prom
     return n ? `${n} work-from-home day${n === 1 ? "" : "s"} set. Only employees allowed to work from home are included.` : "No new days: nobody in that group is allowed to work from home, or the days were already set.";
   });
 }
+
+// Selfie flags (decision 27 Oct 2026): HR or the reporting manager flags, the employee explains, then it is closed
+export async function flagSelfie(cid: string, source: string, ref: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const { supabase } = await getCtx(cid);
+    must(await supabase.rpc("flag_selfie", { p_source: source, p_ref: ref, p_reason: str(fd, "reason"), p_note: str(fd, "note") }));
+    rv(cid);
+    return "Selfie flagged. The employee has been asked to explain.";
+  });
+}
+
+export async function explainSelfieFlag(cid: string, id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const { supabase } = await getCtx(cid);
+    must(await supabase.rpc("explain_selfie_flag", { p_id: id, p_text: str(fd, "explanation") }));
+    rv(cid);
+    return "Explanation sent.";
+  });
+}
+
+export async function closeSelfieFlag(cid: string, id: string, upheld: boolean) {
+  const { supabase } = await getCtx(cid);
+  must(await supabase.rpc("close_selfie_flag", { p_id: id, p_upheld: upheld, p_note: null }));
+  rv(cid);
+}
