@@ -21,6 +21,9 @@ Deno.serve(async (req) => {
   if (error) {
     const auth = error.code === "28000";
     console.error("ingest failed", serial, error.message);
+    // NFR-12: recorded and alerted to HR and the Company Admin (hourly at most); unknown serials are ignored
+    await db.rpc("record_ingest_failure", { p_serial: serial,
+      p_detail: auth ? "the device's key, signature or IP address was rejected" : error.message });
     return Response.json({ error: auth ? "unauthorized" : error.message }, { status: auth ? 401 : 400 });
   }
   return Response.json(data);

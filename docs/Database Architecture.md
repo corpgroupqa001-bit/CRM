@@ -103,6 +103,8 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0042 | `who_is_in` | Decision of 27 Oct 2026 (beyond BRD §5.3): `who_is_in(company)` gives every member each colleague's name, code, photo and present yes/no for today (Present, Late, Early-out, Half-day, On Duty, WFH = in); never the reason; daily_attendance RLS unchanged. Dashboard → "Who's in today" for roles without `attendance.read_all` |
 | 0043 | `wfh_one_session` | Decision of 27 Oct 2026, against BRD ATT-32: `wfh_check_in` refuses a second check-in on a day that already has a closed session; a mistaken check-out is fixed by a correction request (ATT-13) |
 | 0044 | `wfh_early_checkout` | Decision of 27 Oct 2026: `work_sessions.early_reason`; `wfh_check_out(company, selfie, reason)` requires a reason when worked time is below the shift's full-day hours, saves it, and notifies the reporting manager ("Early check-out"); `wfh_live` returns `early_reason` for the manager / HR board |
+| 0045 | `failure_alerts` | BRD NFR-12: `system_failures` (ingestion / payroll / job) + `record_failure` and `record_ingest_failure` (service role); alerts at most once an hour per company, kind and source — punches not saved → Company Admin + HR, payroll run failed → Owner + Company Admin + HR, background job failed → Company Admin + HR; `attendance_tick` isolates each company's job and records failures. Shown on Attendance → Devices & exceptions and Payroll |
+| 0046 | `device_credentials_required` | BRD ATT-07: `ingest_punches` refuses a device with no `device_secrets` row (the key comparison was null and let any key through) |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >

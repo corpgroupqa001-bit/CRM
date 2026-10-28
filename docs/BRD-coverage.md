@@ -76,4 +76,5 @@ EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles
 | NFR-08 backups | ◐ | nightly encrypted dump; monthly restore test to record |
 | NFR-09 retention | ✅† | 8-year statutory retention, 90-day purge of other data, chat retention, selfie retention |
 | NFR-10 mobile PWA | ◐ | PWA, phone bottom bar, AA contrast tokens; full WCAG 2.1 AA audit to do |
-| NFR-01/02/03/11/12 | ◐ | to be measured on the pilot; uptime check not configured |
+| NFR-12 alerts | ◐ | offline devices, punches not saved (incl. rejected key / IP), failed payroll runs and failed background jobs are recorded and alerted in the app, hourly at most (0045); a device without credentials is refused (0046). The 5-minute uptime check is an external service (e.g. UptimeRobot), not configured yet |
+| NFR-01/02/03/11 | ◐ | to be measured on the pilot |

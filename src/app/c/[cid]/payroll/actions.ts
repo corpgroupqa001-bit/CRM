@@ -27,7 +27,18 @@ export async function runPayroll(cid: string, _: ActionState, fd: FormData): Pro
     const ctx = await getCtx(cid);
     assertPerm(ctx, "salaries.manage");
     const { supabase } = ctx;
-    runId = must(await supabase.rpc("run_payroll", { p_company: cid, p_month: `${str(fd, "month")}-01` })) as string;
+    const month = str(fd, "month");
+    const res = await supabase.rpc("run_payroll", { p_company: cid, p_month: `${month}-01` });
+    if (res.error) {
+      // a refusal (attendance not locked, payroll already locked, no permission) is only shown to the person;
+      // anything else is a failed payroll job: recorded and alerted to HR, the Company Admin and the Owner (NFR-12)
+      if (!["P0001", "42501"].includes(res.error.code ?? "")) {
+        await createAdminClient().rpc("record_failure", { p_company: cid, p_kind: "payroll",
+          p_source: fmtMonth(`${month}-01`), p_detail: res.error.message });
+      }
+      throw res.error;
+    }
+    runId = res.data as string;
   });
   if (r?.error) return r;
   rv(cid);
