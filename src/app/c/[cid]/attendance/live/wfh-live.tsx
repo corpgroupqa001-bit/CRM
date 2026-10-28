@@ -6,6 +6,7 @@ import { Card, Table } from "@/components/ui";
 export type WfhLiveRow = {
   employee_id: string; full_name: string; department: string | null; state: "in" | "break" | "out" | "not_started";
   worked_seconds: number; break_seconds: number; checked_in_at: string | null; photo_missing: boolean;
+  early_reason: string | null;   // checked out before the target (0044)
 };
 
 const hm = (s: number) => `${Math.floor(Math.max(0, s) / 3600)}h ${String(Math.floor((Math.max(0, s) % 3600) / 60)).padStart(2, "0")}m`;
@@ -41,9 +42,10 @@ export function WfhLive({ companyId, initial }: { companyId: string; initial: Wf
           const [text, cls] = STATE[r.state];
           return (
             <tr key={r.employee_id}>
-              <td className="td font-medium text-slate-900">{r.full_name}{r.photo_missing && <span className="ml-2 text-xs font-medium text-amber-700">photo missing</span>}</td>
+              <td className="td font-medium text-slate-900"><a href={`/c/${companyId}/attendance/me?employee=${r.employee_id}`} className="hover:underline">{r.full_name}</a>{r.photo_missing && <span className="ml-2 text-xs font-medium text-amber-700">photo missing</span>}</td>
               <td className="td">{r.department ?? "—"}</td>
-              <td className="td"><span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>{text}</span></td>
+              <td className="td"><span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>{text}</span>
+                {r.early_reason && <span className="mt-1 block text-xs text-amber-800">Left early: {r.early_reason}</span>}</td>
               <td className="td tabular-nums">{hm(r.worked_seconds + (r.state === "in" ? elapsed : 0))}</td>
               <td className="td tabular-nums">{hm(r.break_seconds + (r.state === "break" ? elapsed : 0))}</td>
               <td className="td tabular-nums">{r.checked_in_at ? new Date(r.checked_in_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "—"}</td>

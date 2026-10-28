@@ -46,3 +46,4 @@ supabase/.temp
 
 # local production test builds
 /.next-prod/
+/.next-staging/

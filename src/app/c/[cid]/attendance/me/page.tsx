@@ -3,9 +3,10 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Badge, Card, Field, PageHeader, Stat, Table } from "@/components/ui";
 import { fmtDate, fmtTime, label, minutesToHm, todayIST } from "@/lib/format";
 import { fullName } from "@/lib/employees";
-import { cancelRegularisation, cancelWfh, requestRegularisation, requestWfh } from "../actions";
+import { cancelRegularisation, cancelWfh, explainSelfieFlag, requestRegularisation, requestWfh } from "../actions";
 import { WfhPanel, type WfhStatus } from "@/components/wfh-panel";
 import { MobilePunch } from "./punch";
+import { SelfieLog } from "./selfies";
 
 export const metadata = { title: "My attendance" };
 
@@ -20,13 +21,14 @@ export default async function MyAttendance({ params, searchParams }: { params: P
 
   const from = `${month}-01`;
   const to = new Date(new Date(from).getFullYear(), new Date(from).getMonth() + 1, 0).toISOString().slice(0, 10);
-  const [{ data: days }, { data: regs }, { data: who }, { data: wfh }, { data: wfhDays }] = await Promise.all([
+  const [{ data: days }, { data: regs }, { data: who }, { data: wfh }, { data: wfhDays }, { data: myFlags }] = await Promise.all([
     supabase.from("daily_attendance").select("*").eq("employee_id", empId).gte("date", from).lte("date", to).order("date", { ascending: false }),
     supabase.from("regularisations").select("*").eq("employee_id", empId).order("created_at", { ascending: false }).limit(10),
     supabase.from("employees").select("first_name, last_name, mobile_attendance, wfh_eligible").eq("id", empId).maybeSingle(),
     viewingOther ? Promise.resolve({ data: null }) : supabase.rpc("wfh_status", { p_company: cid }),
     supabase.from("wfh_days").select("id, date, status, source, reason").eq("employee_id", empId)
       .gte("date", new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)).order("date").limit(20),
+    viewingOther ? Promise.resolve({ data: [] }) : supabase.from("selfie_flags").select("id, date, reason, note, status, explanation").eq("employee_id", empId).in("status", ["open", "explained"]).order("date"),
   ]);
   const c = (s: string[]) => (days ?? []).filter((d) => s.includes(d.status)).length;
 
@@ -51,9 +53,27 @@ export default async function MyAttendance({ params, searchParams }: { params: P
               ))}
             </Table>
           </Card>
+          {viewingOther && <SelfieLog cid={cid} supabase={supabase} empId={empId} from={from} to={to} />}
         </div>
         {!viewingOther && (
           <div className="space-y-6">
+            {!!myFlags?.length && (
+              <Card title="Flagged selfies" description="HR or your manager flagged these. Explain what happened; you can also request a correction below.">
+                <ul className="space-y-4">
+                  {myFlags.map((f) => (
+                    <li key={f.id} className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between gap-2"><span className="font-medium text-slate-900">{fmtDate(f.date)} · {label(f.reason)}</span>
+                        <Badge value={f.status === "open" ? "pending" : "in_review"} text={f.status === "open" ? "Explain" : "Explained"} /></div>
+                      <p className="text-slate-600">{f.note}</p>
+                      <ActionForm action={explainSelfieFlag.bind(null, cid, f.id)} className="space-y-2">
+                        <textarea name="explanation" rows={2} className="input" required defaultValue={f.explanation ?? ""} placeholder="What happened?" aria-label="Your explanation" />
+                        <SubmitButton className="btn-secondary btn-sm">{f.explanation ? "Update explanation" : "Send explanation"}</SubmitButton>
+                      </ActionForm>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
             {who?.mobile_attendance && <Card title="Mobile punch"><MobilePunch cid={cid} /></Card>}
             {who?.wfh_eligible && employee && (
               <Card title="Work from home" description={(wfh as WfhStatus | null)?.day_status === "approved" ? "Today is an approved work-from-home day." : "Ask for a day in advance; your manager approves it."}>
@@ -82,7 +102,7 @@ export default async function MyAttendance({ params, searchParams }: { params: P
               <ActionForm action={requestRegularisation.bind(null, cid)} className="space-y-3" resetOnSuccess>
                 <Field label="Date"><input className="input" type="date" name="date" max={todayIST()} required /></Field>
                 <Field label="Type"><select className="input" name="kind">
-                  <option value="missed_punch">Missed punch</option><option value="on_duty">On duty (outside office)</option><option value="wfh">Work from home</option></select></Field>
+                  <option value="missed_punch">Missed punch</option><option value="on_duty">On duty (outside office)</option>{who?.wfh_eligible && <option value="wfh">Work from home</option>}</select></Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="In time"><input className="input" type="time" name="in_time" /></Field>
                   <Field label="Out time"><input className="input" type="time" name="out_time" /></Field>

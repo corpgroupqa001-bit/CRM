@@ -1,8 +1,13 @@
 
-# On changes to Supabase files on main, apply migrations and deploy the webhook.
+# Database changes go to staging first, live last:
+#   pull request touching supabase/**  → migrations applied to the STAGING project (secret STAGING_DB_URL)
+#   merge / push to main               → migrations applied to LIVE, then the webhook is deployed
 name: Deploy database
 
 on:
+  pull_request:
+    paths:
+      - "supabase/**"
   push:
     branches: [main]
     paths:
@@ -10,7 +15,27 @@ on:
       - ".github/workflows/**"
 
 jobs:
+  staging:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Apply migrations to staging
+        shell: bash
+        run: |
+          if [ -z "$STAGING_DB_URL" ]; then
+            echo "::warning::STAGING_DB_URL secret is not set; staging was not updated"
+            exit 0
+          fi
+          supabase db push --db-url "$STAGING_DB_URL" --include-all --yes
+
   migrate:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     env:

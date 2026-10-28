@@ -92,10 +92,26 @@ pnpm email:test you@example.com   # connects, logs in, sends a test email, expla
    The punch shows up on **Attendance → Live** in real time.
 5. **Attendance → Month lock** → lock the month. Then **Payroll → Run payroll** → **Approve & lock** → payslip PDF, bank file and statutory exports.
 
+## Staging: test before it goes live
+
+Every change is tried on a separate Supabase project first; `main` is live.
+
+1. Create a second Supabase project (Mumbai region) and put its values in `.env.staging.local`
+   (never committed): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY` and `STAGING_DB_URL` (Connect → Session pooler URI, with the password).
+2. `pnpm staging:db` applies `supabase/migrations` to staging (the script refuses to touch the live project).
+3. `pnpm staging:seed` adds demo data: Demo Industries and Demo Logistics, one login per role
+   (`owner@demo.test`, `admin@`, `hr@`, `manager@`, `ravi@`, `sita@`, password `Demo@12345`), an approved
+   September payroll and a work-from-home day. `pnpm staging:seed -- --reset` starts again.
+4. `pnpm staging:dev` runs the app on http://localhost:3001 against staging (`pnpm dev` stays on :3000 with live).
+5. When it works: push a branch and open a pull request. CI runs the tests; with the `STAGING_DB_URL`
+   GitHub secret set, the database workflow applies the pull request's migrations to staging. Merging to
+   `main` applies them to live.
+
 ## Tests
 
 ```bash
-pnpm test        # 226 tests, no Docker or hosted database needed
+pnpm test        # 233 tests, no Docker or hosted database needed
 pnpm lint && pnpm typecheck && pnpm build
 ```
 The tests load the **real migrations** into PGlite (Postgres compiled to WASM). They cover:

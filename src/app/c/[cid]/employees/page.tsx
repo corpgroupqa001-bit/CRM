@@ -6,7 +6,7 @@ import { fmtDate } from "@/lib/format";
 
 export const metadata = { title: "Employees" };
 
-type Search = { q?: string; department?: string; branch?: string; status?: string; page?: string };
+type Search = { q?: string; department?: string; branch?: string; status?: string; other?: string; page?: string };
 const PAGE = 25;
 
 // EMP-12 directory with search and filters
@@ -18,7 +18,17 @@ export default async function Employees({ params, searchParams }: { params: Prom
   const { supabase, perms, employee } = ctx;
   const page = Math.max(1, Number(sp.page ?? 1));
 
+  // other companies the same person works in, limited to companies this viewer also sees in full (0047)
+  const { data: otherRows } = perms.has("employees.read_all")
+    ? await supabase.rpc("employee_other_companies", { p_company: cid })
+    : { data: [] };
+  const otherOf = new Map<string, { company_name: string; emp_code: string; status: string }[]>();
+  for (const o of (otherRows ?? []) as { employee_id: string; company_name: string; emp_code: string; status: string }[]) {
+    otherOf.set(o.employee_id, [...(otherOf.get(o.employee_id) ?? []), o]);
+  }
+
   let q = supabase.from("employee_directory").select("*", { count: "exact" }).eq("company_id", cid);
+  if (sp.other) q = q.in("id", [...otherOf.keys(), "00000000-0000-0000-0000-000000000000"]);
   if (sp.q) q = q.or(`full_name.ilike.%${sp.q}%,emp_code.ilike.%${sp.q}%,email.ilike.%${sp.q}%`);
   if (sp.department) q = q.eq("department_id", sp.department);
   if (sp.branch) q = q.eq("branch_id", sp.branch);
@@ -72,11 +82,12 @@ export default async function Employees({ params, searchParams }: { params: Prom
               </label>
             ))}
           </fieldset>
+          {perms.has("employees.read_all") && <label className="flex h-8 items-center gap-1.5 text-[13px] text-slate-600"><input type="checkbox" name="other" value="1" defaultChecked={!!sp.other} /> Works in other companies</label>}
           <button className="btn-secondary">Filter</button>
         </form>
       }>
         <div className="hidden md:block">
-          <Table head={["Employee", "Code", "Department", "Designation", "Branch", "Joined", "Status"]} empty="No employees match these filters.">
+          <Table head={["Employee", "Code", "Department", "Designation", "Branch", "Joined", "Status", ...(perms.has("employees.read_all") ? ["Other companies"] : [])]} empty="No employees match these filters.">
             {(rows ?? []).map((e) => (
               <tr key={e.id}>
                 <td className="td"><Link href={`/c/${cid}/employees/${e.id}`} className="flex items-center gap-2.5 font-medium text-slate-900 hover:underline">
@@ -84,6 +95,8 @@ export default async function Employees({ params, searchParams }: { params: Prom
                   <div className="pl-[42px] text-xs text-slate-500">{e.email}</div></td>
                 <td className="td">{e.emp_code}</td><td className="td">{e.department ?? "—"}</td><td className="td">{e.designation ?? "—"}</td>
                 <td className="td">{e.branch ?? "—"}</td><td className="td">{fmtDate(doj.get(e.id))}</td><td className="td"><Badge value={e.status} /></td>
+                {perms.has("employees.read_all") && <td className="td text-sm">{otherOf.get(e.id)?.map((o) => (
+                  <div key={o.company_name} className="whitespace-nowrap">🏢 {o.company_name}{o.status !== "active" && <span className="text-xs text-slate-500"> ({o.status})</span>}</div>)) ?? "—"}</td>}
               </tr>
             ))}
           </Table>
@@ -96,6 +109,7 @@ export default async function Employees({ params, searchParams }: { params: Prom
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium text-slate-900">{e.full_name}</span>
                   <span className="block truncate text-xs text-slate-500">{[e.designation, e.department].filter(Boolean).join(" · ") || e.email}</span>
+                  {otherOf.has(e.id) && <span className="block truncate text-xs text-slate-500">Also in: {otherOf.get(e.id)!.map((o) => o.company_name).join(", ")}</span>}
                 </span>
                 <Badge value={e.status} />
               </Link>

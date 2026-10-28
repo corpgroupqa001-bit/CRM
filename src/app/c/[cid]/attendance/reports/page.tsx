@@ -1,112 +1,61 @@
 import { getCtx, requirePerm } from "@/lib/context";
 import { Card, PageHeader, Table } from "@/components/ui";
-import { minutesToHm, todayIST } from "@/lib/format";
 import { AttendanceTabs } from "../tabs";
-import { PrintButton } from "@/components/print-button";
-import { fmtDate, fmtTime } from "@/lib/format";
+import { ReportFilterBar } from "@/components/report-filter-bar";
+import { ATTENDANCE_VIEWS, attendanceReport, attendanceView } from "@/lib/attendance-report";
+import { dayFilters } from "@/lib/report-filters";
 
 export const metadata = { title: "Attendance reports" };
 
-const SHORT: Record<string, string> = { present: "P", late: "L", early_out: "E", half_day: "H", absent: "A", missed_punch: "M", on_leave: "LV", holiday: "HO", weekly_off: "WO", on_duty: "OD", wfh: "WH" };
 const COLOR: Record<string, string> = { P: "text-emerald-700", L: "text-amber-700", E: "text-amber-700", H: "text-orange-700", A: "text-rose-700", M: "text-rose-700", LV: "text-sky-700", HO: "text-violet-700", WO: "text-slate-400", OD: "text-teal-700", WH: "text-teal-700" };
 
-// ATT-16: monthly summary and muster; Excel export of the same data
-export default async function Reports({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: Promise<{ month?: string; view?: string }> }) {
+// ATT-16 / ATT-34 reports, filtered by branch, department and date range (X-03); Excel, CSV and PDF of the same table
+export default async function Reports({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { cid } = await params;
   const sp = await searchParams;
   const ctx = await getCtx(cid);
   requirePerm(ctx, "attendance.read_all", "attendance.read_team");
-  const month = sp.month ?? todayIST().slice(0, 7);
-  const from = `${month}-01`;
-  const days = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
-  const to = `${month}-${String(days).padStart(2, "0")}`;
-  const [{ data: people }, { data: att }, { data: wfhDays }, { data: autoClosed }] = await Promise.all([
-    ctx.supabase.from("employee_directory").select("id, full_name, emp_code, department").eq("company_id", cid).order("first_name"),
-    ctx.supabase.from("daily_attendance").select("employee_id, date, status, late, late_minutes, first_in, worked_minutes, ot_minutes, ot_approved_minutes").eq("company_id", cid).gte("date", from).lte("date", to),
-    sp.view === "wfh" ? ctx.supabase.from("wfh_days").select("employee_id, date").eq("company_id", cid).eq("status", "approved").gte("date", from).lte("date", to) : Promise.resolve({ data: [] }),
-    sp.view === "wfh" ? ctx.supabase.from("work_sessions").select("employee_id, date").eq("company_id", cid).eq("end_reason", "auto").gte("date", from).lte("date", to) : Promise.resolve({ data: [] }),
+  const f = dayFilters((k) => sp[k]);
+  const view = attendanceView(sp.view);
+  const [t, { data: branches }, { data: departments }] = await Promise.all([
+    attendanceReport(ctx.supabase, cid, f, view),
+    ctx.supabase.from("branches").select("id, name").eq("company_id", cid).order("name"),
+    ctx.supabase.from("departments").select("id, name").eq("company_id", cid).eq("active", true).order("name"),
   ]);
-  const by = new Map<string, NonNullable<typeof att>>();
-  for (const a of att ?? []) by.set(a.employee_id, [...(by.get(a.employee_id) ?? []), a]);
-  const rows = (people ?? []).filter((p) => by.has(p.id));
-  const muster = sp.view === "muster";
-  const names = new Map((people ?? []).map((p) => [p.id, p]));
-  const lateRows = (att ?? []).filter((a) => a.late).sort((a, b) => a.date.localeCompare(b.date));
-  const otRows = (att ?? []).filter((a) => a.ot_minutes > 0).sort((a, b) => a.date.localeCompare(b.date));
+  const muster = view === "muster";
 
   return (
     <>
-      <PageHeader title="Attendance reports" actions={<>
-        <form className="flex flex-wrap gap-2"><input type="month" name="month" defaultValue={month} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Month" />
-          <select name="view" defaultValue={sp.view ?? "summary"} className="input w-[calc(50%-4px)] sm:w-44" aria-label="Report"><option value="summary">Monthly summary</option><option value="muster">Muster roll</option><option value="late">Late-comers</option><option value="overtime">Overtime</option><option value="wfh">Work from home</option></select>
-          <button className="btn-secondary">Show</button></form>
-        <a className="btn-secondary" href={`/api/export/attendance?company=${cid}&month=${month}`}>Excel</a>
-        <PrintButton />
-      </>} />
+      <PageHeader title="Attendance reports" subtitle={t.title} />
       <AttendanceTabs cid={cid} active="reports" perms={ctx.perms} />
-      <Card pad={false}>
-        {sp.view === "wfh" ? (() => {
-          // ATT-34: days worked from home, average worked hours, late check-ins, days closed by auto-checkout
-          const attBy = new Map((att ?? []).map((a) => [`${a.employee_id}|${a.date}`, a]));
-          const per = new Map<string, { days: number; minutes: number; late: number; auto: number }>();
-          for (const d of wfhDays ?? []) {
-            const r = per.get(d.employee_id) ?? { days: 0, minutes: 0, late: 0, auto: 0 };
-            const a = attBy.get(`${d.employee_id}|${d.date}`);
-            r.days++; r.minutes += a?.worked_minutes ?? 0; if (a?.late) r.late++;
-            per.set(d.employee_id, r);
-          }
-          for (const s of autoClosed ?? []) { const r = per.get(s.employee_id); if (r) r.auto++; }
-          return (
-            <Table head={["Employee", "Department", "Days from home", "Average worked", "Late check-ins", "Closed automatically"]} empty="Nobody worked from home this month.">
-              {[...per.entries()].map(([id, r]) => { const p = names.get(id); return (
-                <tr key={id}><td className="td font-medium">{p?.full_name}</td><td className="td">{p?.department ?? "—"}</td>
-                  <td className="td tabular-nums">{r.days}</td><td className="td tabular-nums">{minutesToHm(Math.round(r.minutes / Math.max(1, r.days)))}</td>
-                  <td className="td tabular-nums">{r.late}</td><td className="td tabular-nums">{r.auto}</td></tr>); })}
+      <div className="space-y-4">
+        <ReportFilterBar f={f} unit="day" branches={branches ?? []} departments={departments ?? []}
+          kind={{ name: "view", value: view, options: ATTENDANCE_VIEWS }}
+          download={ctx.perms.has("attendance.read_all") ? { href: "/api/export/attendance", extra: { company: cid, view } } : undefined} />
+        <Card pad={false}>
+          {muster ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead><tr className="bg-slate-50">{t.columns.map((c, i) => (
+                  <th key={c} className={i < 3 ? `th whitespace-nowrap ${i === 1 ? "sticky left-0 bg-slate-50" : ""}` : "px-1 py-2 text-center font-medium text-slate-500"}>{c}</th>))}</tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {t.rows.map((r) => (
+                    <tr key={String(r[0])}>{r.map((v, i) => i < 3
+                      ? <td key={i} className={`td whitespace-nowrap ${i === 1 ? "sticky left-0 bg-surface font-medium" : ""}`}>{v}</td>
+                      : <td key={i} className={`px-1 py-2 text-center font-semibold ${COLOR[String(v)] ?? ""}`}>{v}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+              {!t.rows.length && <p className="px-4 py-6 text-center text-sm text-slate-500">{t.empty}</p>}
+              <p className="px-4 py-3 text-xs text-slate-500">{t.legend}</p>
+            </div>
+          ) : (
+            <Table head={t.columns} empty={t.empty}>
+              {t.rows.map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j} className={`td ${typeof v === "number" ? "tabular-nums" : ""} ${t.columns[j] === "Employee" ? "font-medium" : ""}`}>{v === "" ? "—" : v}</td>)}</tr>)}
             </Table>
-          );
-        })() : sp.view === "late" ? (
-          <Table head={["Date", "Employee", "Department", "First in", "Late by", "Status"]} empty="No late marks this month.">
-            {lateRows.map((a) => { const p = names.get(a.employee_id); return (
-              <tr key={`${a.employee_id}-${a.date}`}><td className="td">{fmtDate(a.date)}</td><td className="td font-medium">{p?.full_name}</td><td className="td">{p?.department ?? "—"}</td>
-                <td className="td">{fmtTime(a.first_in)}</td><td className="td tabular-nums">{a.late_minutes} min</td><td className="td">{a.status === "half_day" ? "Half-day (late rule)" : "Late"}</td></tr>); })}
-          </Table>
-        ) : sp.view === "overtime" ? (
-          <Table head={["Date", "Employee", "Department", "Worked", "Overtime", "Approved"]} empty="No overtime this month.">
-            {otRows.map((a) => { const p = names.get(a.employee_id); return (
-              <tr key={`${a.employee_id}-${a.date}`}><td className="td">{fmtDate(a.date)}</td><td className="td font-medium">{p?.full_name}</td><td className="td">{p?.department ?? "—"}</td>
-                <td className="td tabular-nums">{minutesToHm(a.worked_minutes)}</td><td className="td tabular-nums">{minutesToHm(a.ot_minutes)}</td><td className="td tabular-nums">{minutesToHm(a.ot_approved_minutes)}</td></tr>); })}
-          </Table>
-        ) : muster ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead><tr className="bg-slate-50"><th className="th sticky left-0 bg-slate-50">Employee</th>
-                {Array.from({ length: days }, (_, i) => <th key={i} className="px-1 py-2 text-center font-medium text-slate-500">{i + 1}</th>)}</tr></thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((p) => {
-                  const m = new Map(by.get(p.id)!.map((a) => [Number(a.date.slice(8, 10)), SHORT[a.status] ?? "?"]));
-                  return <tr key={p.id}><td className="td sticky left-0 whitespace-nowrap bg-surface">{p.full_name}</td>
-                    {Array.from({ length: days }, (_, i) => { const s = m.get(i + 1) ?? ""; return <td key={i} className={`px-1 py-2 text-center font-semibold ${COLOR[s] ?? ""}`}>{s}</td>; })}</tr>;
-                })}
-              </tbody>
-            </table>
-            <p className="px-4 py-3 text-xs text-slate-500">P present · L late · E early out · H half-day · A absent · M missed punch · LV leave · HO holiday · WO weekly off · OD on duty · WH work from home</p>
-          </div>
-        ) : (
-          <Table head={["Employee", "Department", "Present", "Half days", "Absent", "Leave", "Late marks", "Hours worked", "OT (approved)"]}>
-            {rows.map((p) => {
-              const a = by.get(p.id)!;
-              const c = (s: string[]) => a.filter((x) => s.includes(x.status)).length;
-              return (
-                <tr key={p.id}><td className="td font-medium">{p.full_name} <span className="text-xs text-slate-500">{p.emp_code}</span></td><td className="td">{p.department ?? "—"}</td>
-                  <td className="td">{c(["present", "late", "early_out", "on_duty", "wfh"])}</td><td className="td">{c(["half_day"])}</td>
-                  <td className="td">{c(["absent", "missed_punch"])}</td><td className="td">{c(["on_leave"])}</td><td className="td">{a.filter((x) => x.late).length}</td>
-                  <td className="td">{minutesToHm(a.reduce((s, x) => s + x.worked_minutes, 0))}</td>
-                  <td className="td">{minutesToHm(a.reduce((s, x) => s + x.ot_minutes, 0))} ({minutesToHm(a.reduce((s, x) => s + x.ot_approved_minutes, 0))})</td></tr>
-              );
-            })}
-          </Table>
-        )}
-      </Card>
+          )}
+        </Card>
+      </div>
     </>
   );
 }

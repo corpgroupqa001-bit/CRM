@@ -1,7 +1,7 @@
 # Database architecture: corpgroup.com
 
 The database is the core of this application. Besides storing data, it **enforces permissions (RLS), integrity rules (triggers) and the attendance and payroll calculations (PL/pgSQL)**.
-This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0031). For the application side, see [`system.md`](./system.md).
+This document describes the schema as defined by `supabase/migrations/` (migrations 0001 to 0036). For the application side, see [`system.md`](./system.md).
 
 > **The migrations are the source of truth.** If this document and a migration disagree, the migration wins. Please update this file in the same PR.
 
@@ -90,6 +90,22 @@ This document describes the schema as defined by `supabase/migrations/` (migrati
 | 0029 | `missed_out_and_retention` | `companies.missed_out_grace_hours` (default 2) used by `compute_attendance_day` for ATT-36 with a one-time "Missed check-out" notification; `companies.selfie_retention_days` (default 90); `retention_storage_due()` lists selfies and purged-company documents for the daily `/api/cron/retention` job |
 | 0030 | `work_from_home` | `employees.wfh_eligible`, `companies.wfh_capture_gps`; tables `wfh_days`, `work_sessions`, `work_breaks` (read via RLS, written only by functions); `request_wfh`, `decide_wfh`, `cancel_wfh`, `assign_wfh`, `wfh_check_in`, `wfh_break`, `wfh_check_out`, `wfh_status`, `wfh_live`, `wfh_auto_close` (from `attendance_tick`); `compute_attendance_day` derives WFH day status from worked hours |
 | 0031 | `sync_system_role` | Keeps `employees.invite_role` (Job tab) and `company_members.role` (Users & roles) in step in both directions (never the owner); repairs a role set on the Job tab that never reached the person's access |
+| 0032 | `run_payroll_safeupdate` | `run_payroll` empties its temporary table with `delete ... where true`: hosted Supabase (safeupdate) refuses a DELETE without WHERE on API requests, so payroll couldn't run from the app. `tests/safeupdate.test.ts` checks every function for this |
+| 0033 | `wfh_regularisation_eligibility` | A correction of kind `wfh` is refused unless the employee is WFH-eligible (ATT-21); on-site and field staff record attendance by punches |
+| 0034 | `selfies_hr_manager_only` | Selfie files readable only by HR / Payroll and the employee's reporting manager (ATT-25); shown on the employee's attendance page |
+| 0035 | `selfie_flags` | Decision of 27 Oct 2026 (beyond BRD v2.0): `selfie_flags`; `flag_selfie` (HR / Payroll or the reporting manager, reason + note), `explain_selfie_flag` (the employee), `close_selfie_flag` (accept or uphold). Notifications and audit at each step; no effect on attendance or pay by itself |
+| 0036 | `add_existing_person` | Decision of 27 Oct 2026 (builds on EMP-10, AUTH-11): `people_from_my_companies` (people of my other companies where I'm Owner / Company Admin) and `add_existing_person` (add and keep, or move out of chosen / all companies the day before); copies name, email and phone only (BRD §7.2); a former record here is reactivated |
+| 0037 | `custom_roles` | BRD §5.2: `company_roles` + `company_role_permissions` (a company's own roles, copied from Company Admin / HR / Manager / Employee); `company_members.custom_role_id`; `has_perm` / `my_access` use the ticked list for people on a custom role (their `role` stays the copied-from role for role-name rules); `clone_role`, `save_role`, `delete_role` (refused while held), `assignable_permissions`; new permission `roles.manage` (Owner, Company Admin); Job-tab role change ends a custom role; support access and cross-company moves also need the permission |
+| 0038 | `edit_default_roles` | Decision of 27 Oct 2026: every role viewable; default roles (not the Owner) editable per company in `company_default_roles` (`save_default_role`, `reset_default_role`; `role_perms` used by `my_access` / `clone_role`); the Company Admin role keeps `roles.manage` + `employees.assign_role`; as per BRD §5.2/§5.3 only the Company Admin has `roles.manage` (taken from the Owner); Owner and HR view roles (Settings R) |
+| 0039 | `owner_manages_roles` | Decision of 27 Oct 2026 (option A): the Owner also gets `roles.manage` (beyond BRD §5.3 Settings R); role functions say "Only the Owner or a Company Admin" |
+| 0040 | `statutory_switch_notify` | Decision of 27 Oct 2026: when PF, ESI, PT, LWF or TDS is switched on or off in `statutory_settings`, every Owner and Company Admin is notified (link `/payroll/setup`); HR keeps the switches (BRD §5.3); the app confirms before a switch is turned off |
+| 0041 | `lockout_minutes` | BRD AUTH-02: `companies.lockout_minutes` (15 default, 30, 60 or 1440), set by the Company Admin in Settings → Policies; the longest among a login's companies applies (`src/lib/auth/lockout.ts`); Owner, Company Admin and HR unlock from the employee's Lifecycle tab |
+| 0042 | `who_is_in` | Decision of 27 Oct 2026 (beyond BRD §5.3): `who_is_in(company)` gives every member each colleague's name, code, photo and present yes/no for today (Present, Late, Early-out, Half-day, On Duty, WFH = in); never the reason; daily_attendance RLS unchanged. Dashboard → "Who's in today" for roles without `attendance.read_all` |
+| 0043 | `wfh_one_session` | Decision of 27 Oct 2026, against BRD ATT-32: `wfh_check_in` refuses a second check-in on a day that already has a closed session; a mistaken check-out is fixed by a correction request (ATT-13) |
+| 0044 | `wfh_early_checkout` | Decision of 27 Oct 2026: `work_sessions.early_reason`; `wfh_check_out(company, selfie, reason)` requires a reason when worked time is below the shift's full-day hours, saves it, and notifies the reporting manager ("Early check-out"); `wfh_live` returns `early_reason` for the manager / HR board |
+| 0045 | `failure_alerts` | BRD NFR-12: `system_failures` (ingestion / payroll / job) + `record_failure` and `record_ingest_failure` (service role); alerts at most once an hour per company, kind and source — punches not saved → Company Admin + HR, payroll run failed → Owner + Company Admin + HR, background job failed → Company Admin + HR; `attendance_tick` isolates each company's job and records failures. Shown on Attendance → Devices & exceptions and Payroll |
+| 0046 | `device_credentials_required` | BRD ATT-07: `ingest_punches` refuses a device with no `device_secrets` row (the key comparison was null and let any key through) |
+| 0047 | `other_companies` | Decision of 28 Oct 2026 (AUTH-11, EMP-10, COM-07): `employee_other_companies(company)` lists, per employee, the other active companies the same person (same login or work email) works in — name, code, status — only where the viewer also has `employees.read_all` (NFR-04 isolation). Employees list column + filter, employee page line |
 
 > Some functions are **redefined** in later migrations (`create or replace`). The live version is the one in the **last** migration listed:
 >
@@ -410,7 +426,7 @@ All are `stable security definer` (they read membership without hitting RLS them
 | `has_role(cid, roles[])` | The user is an active member with one of the roles |
 | `my_role(cid)` | (returns the role text) |
 | `is_hr(cid)` | Role is owner, company_admin or hr (legacy; 0018 policies use `has_perm`) |
-| `has_perm(cid, perm)` | The user is a member in good standing whose role has `perm` in `role_permissions` (0018) |
+| `has_perm(cid, perm)` | The user is a member in good standing whose role has `perm` in `role_permissions` (0018), or, on a custom role, whose role has it ticked in `company_role_permissions` (0037); a company's own version of a default role (`company_default_roles`, 0038) replaces the standard list |
 | `in_good_standing(cid)` | The user's employee record (if any) is not inactive or exited (0018) |
 | `my_access(cid)` | `{allowed, reason, role, permissions[]}` for the signed-in user, loaded by the app on every request (0018) |
 | `is_super_admin()` | The user has a row in `platform_admins` (0018) |

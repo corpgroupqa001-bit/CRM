@@ -17,9 +17,12 @@ export default async function Payroll({ params, searchParams }: { params: Promis
   const today = todayIST();
   const prev = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 2, 1);
   const month = sp.month ?? `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
-  const [{ data: runs }, checks] = await Promise.all([
+  const [{ data: runs }, checks, { data: failures }] = await Promise.all([
     ctx.supabase.from("payroll_runs").select("*").eq("company_id", cid).order("month", { ascending: false }).order("version", { ascending: false }).limit(60),
     precheck(cid, `${month}-01`),
+    // NFR-12: payroll runs that failed (nothing was saved), last 30 days
+    ctx.supabase.from("system_failures").select("source, detail, at").eq("company_id", cid).eq("kind", "payroll")
+      .gte("at", new Date(Date.now() - 30 * 864e5).toISOString()).order("at", { ascending: false }).limit(10),
   ]);
   const errors = checks.filter((c) => c.level === "error");
 
@@ -66,6 +69,13 @@ export default async function Payroll({ params, searchParams }: { params: Promis
             ))}
           </Table>
         </Card>
+        {!!failures?.length && (
+          <Card title="Failed payroll runs (last 30 days)" description="Nothing was saved for these. HR, the Company Admin and the Owner were alerted." pad={false} className="lg:col-span-3">
+            <Table head={["When", "Month", "Reason"]}>
+              {failures.map((f, i) => <tr key={i}><td className="td whitespace-nowrap">{fmtDateTime(f.at)}</td><td className="td font-medium">{f.source}</td><td className="td text-sm text-rose-700">{f.detail}</td></tr>)}
+            </Table>
+          </Card>
+        )}
       </div>
     </>
   );

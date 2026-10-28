@@ -1,6 +1,7 @@
 import { getCtx, requirePerm } from "@/lib/context";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Card, Field, PageHeader, Table } from "@/components/ui";
+import { StatutorySwitch } from "@/components/statutory-switch";
 import { PayrollTabs, ViewOnlyNote } from "../tabs";
 import { addStructure, deleteComponent, saveComponent, saveStatutorySettings } from "../actions";
 
@@ -75,7 +76,7 @@ export default async function Setup({ params }: { params: Promise<{ cid: string 
             <fieldset disabled={!canManage} className="space-y-6">
             <fieldset className="grid gap-3 sm:grid-cols-5">
               <legend className="mb-2 text-sm font-semibold">Provident Fund</legend>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="pf_enabled" defaultChecked={s.pf_enabled} /> Enabled</label>
+              <StatutorySwitch name="pf_enabled" defaultChecked={s.pf_enabled} />
               <Field label="Employee %"><input className="input" name="pf_employee_rate" type="number" step="0.01" defaultValue={s.pf_employee_rate} /></Field>
               <Field label="Employer %"><input className="input" name="pf_employer_rate" type="number" step="0.01" defaultValue={s.pf_employer_rate} /></Field>
               <Field label="Wage ceiling ₹"><input className="input" name="pf_wage_ceiling" type="number" defaultValue={s.pf_wage_ceiling} /></Field>
@@ -83,24 +84,24 @@ export default async function Setup({ params }: { params: Promise<{ cid: string 
             </fieldset>
             <fieldset className="grid gap-3 sm:grid-cols-5">
               <legend className="mb-2 text-sm font-semibold">ESI</legend>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="esi_enabled" defaultChecked={s.esi_enabled} /> Enabled</label>
+              <StatutorySwitch name="esi_enabled" defaultChecked={s.esi_enabled} />
               <Field label="Employee %"><input className="input" name="esi_employee_rate" type="number" step="0.01" defaultValue={s.esi_employee_rate} /></Field>
               <Field label="Employer %"><input className="input" name="esi_employer_rate" type="number" step="0.01" defaultValue={s.esi_employer_rate} /></Field>
               <Field label="Wage ceiling ₹"><input className="input" name="esi_wage_ceiling" type="number" defaultValue={s.esi_wage_ceiling} /></Field>
             </fieldset>
             <fieldset className="grid gap-3 sm:grid-cols-4">
               <legend className="mb-2 text-sm font-semibold">Professional Tax & Labour Welfare Fund</legend>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="pt_enabled" defaultChecked={s.pt_enabled} /> PT enabled</label>
+              <StatutorySwitch name="pt_enabled" defaultChecked={s.pt_enabled} label="PT enabled" />
               <Field label="PT slabs (JSON)" className="sm:col-span-3" hint='[{"min":0,"max":15000,"amount":0}, …] — optional "feb_amount" for February'>
                 <textarea className="input font-mono text-xs" name="pt_slabs" rows={3} defaultValue={JSON.stringify(s.pt_slabs)} /></Field>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="lwf_enabled" defaultChecked={s.lwf_enabled} /> LWF enabled</label>
+              <StatutorySwitch name="lwf_enabled" defaultChecked={s.lwf_enabled} label="LWF enabled" />
               <Field label="LWF employee ₹"><input className="input" name="lwf_employee" type="number" defaultValue={s.lwf_employee} /></Field>
               <Field label="LWF employer ₹"><input className="input" name="lwf_employer" type="number" defaultValue={s.lwf_employer} /></Field>
               <Field label="LWF months" hint="e.g. 6, 12"><input className="input" name="lwf_months" defaultValue={(s.lwf_months ?? []).join(", ")} /></Field>
             </fieldset>
             <fieldset className="grid gap-3 sm:grid-cols-4">
               <legend className="mb-2 text-sm font-semibold">Income tax (TDS)</legend>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="tds_enabled" defaultChecked={s.tds_enabled} /> Enabled</label>
+              <StatutorySwitch name="tds_enabled" defaultChecked={s.tds_enabled} />
               <Field label="Standard deduction ₹"><input className="input" name="standard_deduction" type="number" defaultValue={s.standard_deduction} /></Field>
               <Field label="Rebate up to income ₹"><input className="input" name="rebate_limit" type="number" defaultValue={s.rebate_limit} /></Field>
               <Field label="Max rebate ₹"><input className="input" name="rebate_max" type="number" defaultValue={s.rebate_max} /></Field>

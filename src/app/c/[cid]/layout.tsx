@@ -7,7 +7,7 @@ import { logout } from "@/app/(auth)/actions";
 export default async function CompanyLayout({ children, params }: { children: React.ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
   const ctx = await getCtx(cid);
-  const { supabase, user, role, perms, company, employee } = ctx;
+  const { supabase, user, role, customRole, perms, company, employee } = ctx;
 
   const [{ data: memberships }, { data: myRecords }, { count: unread }, { data: profile }, { data: superAdmin }] = await Promise.all([
     supabase.from("company_members").select("role, companies(id, name)").eq("user_id", user.id).eq("active", true),
@@ -30,7 +30,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
       userName={name}
       userEmail={user.email ?? ""}
       groups={NAV_GROUPS}
-      roleLabel={ROLE_LABEL[role]}
+      roleLabel={customRole ?? ROLE_LABEL[role]}
       nav={NAV.filter((n) => n.show(perms)).map(({ href, label, icon, group }) => ({ href, label, icon, group }))}
       companies={companies}
       isMultiOwner={companies.filter((c) => c.role === "owner").length >= 2}

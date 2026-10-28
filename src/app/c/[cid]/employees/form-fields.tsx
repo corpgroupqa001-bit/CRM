@@ -54,7 +54,7 @@ export function JobFields({ e = {}, o, canSetRole = false }: { e?: Emp; o: JobOp
       <Field label="Shift"><select className="input" name="shift_id" defaultValue={v("shift_id")}><option value="">Company default</option>{opt(o.shifts)}</select></Field>
       <Field label="Probation ends"><input className="input" name="probation_end" type="date" defaultValue={v("probation_end")} /></Field>
       {canSetRole ? (
-        <Field label="System role" hint="What they can access once they sign in. Designation does not grant access.">
+        <Field label="System role" hint="What they can access once they sign in. Designation does not grant access. Changing it here takes them off a custom role (Settings → Users & roles).">
           <select className="input" name="invite_role" defaultValue={v("invite_role") || "employee"}>
             {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
       ) : (

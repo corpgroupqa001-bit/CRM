@@ -9,7 +9,8 @@ import {
   documentUrl, inviteEmployee, issueAsset, lifecycle, mapDevice, removeEmployee, returnAsset, saveStatutory, setEmployeePassword, toggleChecklist,
   transferCompany, unlockLogin, unmapDevice, updateEmployee,
 } from "../actions";
-import { isLockedOut, PASSWORD_RULE } from "@/lib/auth/session";
+import { lockStatus, PASSWORD_RULE } from "@/lib/auth/session";
+import { lockoutLabel, lockTimeText } from "@/lib/auth/lockout";
 import { JobFields, PersonalFields, StatutoryFields, jobOptions } from "../form-fields";
 import { CompaniesTab } from "./companies-tab";
 
@@ -194,9 +195,9 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     const act = lifecycle.bind(null, cid, eid);
     // AUTH-02 / AUTH-15: lockout state and recent sign-ins (login history is readable by the Owner and Company Admin)
     const [locked, { data: logins }] = e.user_id && acct
-      ? await Promise.all([isLockedOut(String(e.email).toLowerCase()),
+      ? await Promise.all([lockStatus(String(e.email).toLowerCase()),
           supabase.from("login_history").select("at, ip, user_agent, method").eq("user_id", e.user_id).order("at", { ascending: false }).limit(10)])
-      : [false, { data: null }];
+      : [null, { data: null }];
     const sel = (name: string, rows: { id: string; name?: string; full_name?: string }[], cur: string | null) => (
       <select className="input" name={name} defaultValue={cur ?? ""}><option value="">—</option>{rows.map((r) => <option key={r.id} value={r.id}>{r.full_name ?? r.name}</option>)}</select>);
     body = (
@@ -251,9 +252,9 @@ export default async function EmployeePage({ params, searchParams }: { params: P
             <SubmitButton className="btn-secondary">{e.user_id ? "Set password" : "Create login"}</SubmitButton>
           </ActionForm>
         </Card>}
-        {acct && e.user_id && <Card title="Sign-in" description="Five wrong passwords in 15 minutes lock the login for 15 minutes.">
+        {acct && e.user_id && <Card title="Sign-in" description={`Five wrong passwords in 15 minutes lock the login for ${lockoutLabel(ctx.company.lockout_minutes)} (Settings → Policies), or until someone here unlocks it.`}>
           <div className="flex flex-wrap items-center gap-3">
-            <Badge value={locked ? "blocked" : "active"} text={locked ? "Locked out" : "Not locked"} />
+            <Badge value={locked ? "blocked" : "active"} text={locked ? `Locked until ${lockTimeText(locked)}` : "Not locked"} />
             {locked && <ActionForm action={unlockLogin.bind(null, cid, eid)} className="flex items-center gap-2"><SubmitButton className="btn-secondary btn-sm">Unlock now</SubmitButton></ActionForm>}
           </div>
           {logins && (
@@ -330,6 +331,12 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     );
   }
 
+  // the other companies this person works in, that this viewer also sees in full (0047)
+  const { data: elsewhere } = perms.has("employees.read_all")
+    ? await supabase.rpc("employee_other_companies", { p_company: cid })
+    : { data: [] };
+  const alsoIn = ((elsewhere ?? []) as { employee_id: string; company_name: string; emp_code: string; status: string }[]).filter((o) => o.employee_id === eid);
+
   return (
     <>
       <PageHeader
@@ -342,7 +349,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
         )}
       />
       <div className="mb-4 flex items-center gap-3"><Avatar name={fullName(e)} url={e.photo_url} size={48} />
-        <div className="text-sm text-slate-600">{e.email}{e.phone ? ` · ${e.phone}` : ""}<br />Joined {fmtDate(e.date_of_joining)}{e.user_id ? " · App access active" : e.invited_at ? ` · Invited ${fmtDate(e.invited_at)}` : " · Not invited yet"}</div>
+        <div className="text-sm text-slate-600">{e.email}{e.phone ? ` · ${e.phone}` : ""}<br />Joined {fmtDate(e.date_of_joining)}{e.user_id ? " · App access active" : e.invited_at ? ` · Invited ${fmtDate(e.invited_at)}` : " · Not invited yet"}
+          {alsoIn.length > 0 && <><br />🏢 Also works in: {alsoIn.map((o) => `${o.company_name} (${o.emp_code}, ${o.status[0].toUpperCase()}${o.status.slice(1)})`).join(" · ")}</>}</div>
       </div>
       <Tabs tabs={tabs} active={tab} />
       {body}

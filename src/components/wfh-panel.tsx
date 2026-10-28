@@ -27,11 +27,21 @@ export function WfhPanel({ cid, employeeId, initial, compact = false }: { cid: s
   const [camera, setCamera] = useState<null | "in" | "out">(null);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<ActionState>(null);
+  const [askBreak, setAskBreak] = useState(false);              // "Start your break now?" (a mis-tap would stop the work timer)
+  const [breakSince, setBreakSince] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const { data } = await createClient().rpc("wfh_status", { p_company: cid });
     if (data) { setSt(data as WfhStatus); setBase(Date.now()); }
   }, [cid]);
+
+  // when the open break started, for the "on break since" reminder
+  useEffect(() => {
+    if (st.state !== "break") { setBreakSince(null); return; }
+    createClient().from("work_breaks").select("started_at").eq("employee_id", employeeId).is("ended_at", null)
+      .order("started_at", { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => setBreakSince(data?.started_at ?? null));
+  }, [st.state, employeeId]);
 
   useEffect(() => { setSt(initial); setBase(Date.now()); }, [initial]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -51,7 +61,7 @@ export function WfhPanel({ cid, employeeId, initial, compact = false }: { cid: s
   const left = Math.max(0, st.target_seconds - worked);
   const pct = st.target_seconds ? Math.min(100, (worked / st.target_seconds) * 100) : 0;
 
-  const brk = (startBreak: boolean) => start(async () => { setMsg(await wfhBreak(cid, startBreak)); await refresh(); });
+  const brk = (startBreak: boolean) => start(async () => { setAskBreak(false); setMsg(await wfhBreak(cid, startBreak)); await refresh(); });
 
   if (st.day_status !== "approved") return null;
   return (
@@ -73,24 +83,51 @@ export function WfhPanel({ cid, employeeId, initial, compact = false }: { cid: s
         <div className="flex flex-col-reverse rounded-xl bg-slate-50 px-2 py-2.5"><dt className="text-xs text-slate-500">Left to target</dt><dd className="text-base font-semibold tabular-nums text-slate-900">{hms(left)}</dd></div>
       </dl>
       <div className="flex flex-wrap gap-2">
-        {st.state === "out" && <button type="button" className="btn-primary h-11 flex-1" onClick={() => setCamera("in")}><LogIn className="h-4 w-4" /> Check in</button>}
-        {st.state === "in" && <>
-          <button type="button" className="btn-secondary h-11 flex-1" disabled={pending} onClick={() => brk(true)}><Coffee className="h-4 w-4" /> Start break</button>
+        {st.state === "out" && !st.sessions && <button type="button" className="btn-primary h-11 flex-1" onClick={() => setCamera("in")}><LogIn className="h-4 w-4" /> Check in</button>}
+        {st.state === "out" && st.sessions > 0 && (
+          // one session per work-from-home day (decision of 27 Oct 2026): the day is finished and saved
+          <p role="status" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+            ✅ <b>Checked out for today.</b> {hms(worked)} worked is saved. Checked out by mistake? Use <b>Request a correction</b>.
+          </p>
+        )}
+        {st.state === "in" && !askBreak && <>
+          <button type="button" className="btn-secondary h-11 flex-1" disabled={pending} onClick={() => { setMsg(null); setAskBreak(true); }}><Coffee className="h-4 w-4" /> Start break</button>
           <button type="button" className="btn-primary h-11 flex-1" onClick={() => setCamera("out")}><LogOut className="h-4 w-4" /> Check out</button>
         </>}
         {st.state === "break" && <button type="button" className="btn-primary h-11 flex-1" disabled={pending} onClick={() => brk(false)}><Play className="h-4 w-4" /> End break</button>}
       </div>
+      {st.state === "in" && askBreak && (
+        <div role="alertdialog" aria-labelledby="wfh-break-q" className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p id="wfh-break-q" className="flex items-center gap-2 font-semibold text-amber-900"><Coffee className="h-4 w-4" /> Start your break now?</p>
+          <p className="mt-1 text-sm text-amber-900">Your work timer will pause. Remember to press <b>End break</b> when you&apos;re back.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="btn-secondary h-11 flex-1" onClick={() => setAskBreak(false)} autoFocus>Cancel</button>
+            <button type="button" className="btn-primary h-11 flex-1" disabled={pending} onClick={() => brk(true)}>{pending ? "Starting…" : "Start break"}</button>
+          </div>
+        </div>
+      )}
+      {st.state === "break" && (
+        <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          ☕ You&apos;re on break{breakSince ? ` since ${new Date(breakSince).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}` : ""}. Your work timer is paused: press <b>End break</b> when you&apos;re back.
+        </p>
+      )}
       {st.capture_gps && st.state === "out" && <p className="flex items-center gap-1.5 text-xs text-slate-500"><MapPin className="h-3.5 w-3.5" /> Your company records your location when you check in.</p>}
       {msg?.error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{msg.error}</p>}
       {msg?.ok && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{msg.ok}</p>}
-      {camera && <SelfieCapture cid={cid} kind={camera} gps={st.capture_gps} onDone={async (r) => { setCamera(null); setMsg(r); await refresh(); }} onCancel={() => setCamera(null)} />}
+      {camera && <SelfieCapture cid={cid} kind={camera} gps={st.capture_gps} onDone={async (r) => { setCamera(null); setMsg(r); await refresh(); }} onCancel={() => setCamera(null)}
+        early={camera === "out" && left > 0 ? { worked, target: st.target_seconds } : null} />}
     </div>
   );
 }
 
 // ATT-23: a selfie from the live camera only (no gallery upload); ATT-27: if the camera can't be used,
 // the check-in still goes through and is flagged "photo missing".
-function SelfieCapture({ cid, kind, gps, onDone, onCancel }: { cid: string; kind: "in" | "out"; gps: boolean; onDone: (r: ActionState) => void; onCancel: () => void }) {
+// Checking out before the target (decision of 27 Oct 2026, 0044): the time left is shown and a reason is
+// required; the server checks it again and tells the reporting manager.
+function SelfieCapture({ cid, kind, gps, onDone, onCancel, early }: {
+  cid: string; kind: "in" | "out"; gps: boolean; onDone: (r: ActionState) => void; onCancel: () => void;
+  early: { worked: number; target: number } | null;
+}) {
   const action = kind === "in" ? wfhCheckIn.bind(null, cid) : wfhCheckOut.bind(null, cid);
   const [state, formAction, pending] = useActionState(action, null);
   const video = useRef<HTMLVideoElement>(null);
@@ -127,6 +164,19 @@ function SelfieCapture({ cid, kind, gps, onDone, onCancel }: { cid: string; kind
 
   return (
     <form action={submit} className="space-y-3 rounded-xl border border-slate-200 p-3">
+      {early && (
+        <div role="alert" className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+          <p className="font-semibold">⚠️ You&apos;re checking out early</p>
+          <dl className="grid grid-cols-3 gap-2 text-center text-sm">
+            <div><dt className="text-xs">Worked today</dt><dd className="font-semibold tabular-nums">{hms(early.worked)}</dd></div>
+            <div><dt className="text-xs">Target</dt><dd className="font-semibold tabular-nums">{hms(early.target)}</dd></div>
+            <div><dt className="text-xs">Left to target</dt><dd className="font-semibold tabular-nums">{hms(early.target - early.worked)}</dd></div>
+          </dl>
+          <p className="text-sm">Checking out ends your work-from-home day: you can&apos;t check in again today.</p>
+          <label className="block text-sm font-medium">Reason for leaving early
+            <textarea name="reason" required minLength={3} maxLength={300} rows={2} className="input mt-1" placeholder="e.g. Doctor's appointment" /></label>
+        </div>
+      )}
       <div className="text-sm font-semibold text-slate-900">{kind === "in" ? "Check-in selfie" : "Check-out selfie"}</div>
       {!noCamera ? (
         <div className="overflow-hidden rounded-xl bg-black">
@@ -139,7 +189,7 @@ function SelfieCapture({ cid, kind, gps, onDone, onCancel }: { cid: string; kind
         {!noCamera && (!shot
           ? <button type="button" className="btn-secondary flex-1" onClick={capture} disabled={!stream}><Camera className="h-4 w-4" /> Take selfie</button>
           : <button type="button" className="btn-secondary flex-1" onClick={() => setShot(null)}>Retake</button>)}
-        <button className="btn-primary flex-1" disabled={pending || (!shot && !noCamera)}>{pending ? "Saving…" : kind === "in" ? "Check in" : "Check out"}</button>
+        <button className="btn-primary flex-1" disabled={pending || (!shot && !noCamera)}>{pending ? "Saving…" : kind === "in" ? "Check in" : early ? "Check out early" : "Check out"}</button>
       </div>
       <button type="button" className="btn-ghost btn-sm w-full" onClick={onCancel}>Cancel</button>
     </form>

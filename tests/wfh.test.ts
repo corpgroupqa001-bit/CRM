@@ -61,14 +61,16 @@ describe("ATT-23/27/28/32/33: check-in, breaks, check-out on the server clock", 
     await expect(as("ravi", `select wfh_check_in($1, $2, 'x', null, null)`, [cid, `${cid}/${E.sita}/x.jpg`])).rejects.toThrow();
   });
 
-  it("breaks pause the timer; several sessions add up; nothing can be written directly", async () => {
+  it("breaks pause the timer; after check-out the day is finished (decision of 27 Oct, 0043); nothing can be written directly", async () => {
     await as("ravi", `select wfh_break($1, true)`, [cid]);
     expect((await status("ravi")).state).toBe("break");
     await expect(as("ravi", `select wfh_break($1, true)`, [cid])).rejects.toThrow(/already on a break/);
     await as("ravi", `select wfh_break($1, false)`, [cid]);
-    await as("ravi", `select wfh_check_out($1, $2)`, [cid, `${cid}/${E.ravi}/out.jpg`]);
-    await as("ravi", `select wfh_check_in($1, $2, 'x', null, null)`, [cid, `${cid}/${E.ravi}/in2.jpg`]);
-    expect(Number((await status("ravi")).sessions)).toBe(2);
+    await as("ravi", `select wfh_check_out($1, $2, 'Network down at home')`, [cid, `${cid}/${E.ravi}/out.jpg`]);   // early: a reason (0044)
+    await expect(as("ravi", `select wfh_check_in($1, $2, 'x', null, null)`, [cid, `${cid}/${E.ravi}/in2.jpg`]))
+      .rejects.toThrow(/already checked out today/);
+    expect((await status("ravi")).state).toBe("out");
+    expect(Number((await status("ravi")).sessions)).toBe(1);
     await expect(as("ravi", `insert into work_sessions (company_id, employee_id, date, started_at) values ($1, $2, current_date, now() - interval '9 hours')`, [cid, E.ravi]))
       .rejects.toThrow(/row-level security/);
     await expect(as("ravi", `update work_sessions set started_at = now() - interval '9 hours' returning id`)).resolves.toHaveLength(0);
@@ -87,7 +89,7 @@ describe("ATT-23/27/28/32/33: check-in, breaks, check-out on the server clock", 
     expect(d).toEqual({ status: "half_day", late: true, worked_minutes: 255 });   // 4 h 15 m: half-day threshold met, late after 09:00 + 0 grace
   });
 
-  it("ATT-32: the status follows total worked hours across sessions", async () => {
+  it("ATT-32: the status follows total worked hours across sessions (sessions recorded before 0043, or by HR)", async () => {
     const [{ id }] = await sys<{ id: string }>(`insert into work_sessions (company_id, employee_id, date, started_at, ended_at, end_reason)
       values ($1, $2, '2026-10-20', '2026-10-20 15:00+05:30', '2026-10-20 19:00+05:30', 'checkout') returning id`, [cid, E.sita]);
     expect(id).toBeTruthy();
@@ -97,9 +99,40 @@ describe("ATT-23/27/28/32/33: check-in, breaks, check-out on the server clock", 
   });
 });
 
+describe("checking out early (decision of 27 Oct, 0044)", () => {
+  it("before the target a reason is required, saved, shown to the manager and the manager is told", async () => {
+    await sys(`update employees set reporting_manager_id = $1 where id = $2`, [E.manager, E.sita]);
+    await sys(`insert into wfh_days (company_id, employee_id, date, status, source) values ($1, $2, $3::date, 'approved', 'hr') on conflict (employee_id, date) do update set status = 'approved'`, [cid, E.sita, await today()]);
+    await as("sita", `select wfh_check_in($1, null, 'x', null, null)`, [cid]);
+    await expect(as("sita", `select wfh_check_out($1, null)`, [cid])).rejects.toThrow(/give a reason for leaving early/);
+    await expect(as("sita", `select wfh_check_out($1, null, '  ')`, [cid])).rejects.toThrow(/give a reason for leaving early/);
+    expect((await status("sita")).state).toBe("in");                                          // still working
+    await sys(`delete from notifications`);
+    await as("sita", `select wfh_check_out($1, null, 'Doctor''s appointment')`, [cid]);
+    expect((await status("sita")).state).toBe("out");
+    expect(await sys(`select early_reason from work_sessions where employee_id = $1 and date = $2::date`, [E.sita, await today()])).toEqual([{ early_reason: "Doctor's appointment" }]);
+    const [n] = await sys<{ user_id: string; title: string; body: string }>(`select user_id, title, body from notifications`);
+    expect(n.user_id).toBe(U.manager);
+    expect(n.title).toBe("Early check-out");
+    expect(n.body).toMatch(/^sita checked out \d+ h \d+ min early: Doctor's appointment$/);
+    const live = await as<{ full_name: string; early_reason: string | null }>("manager", `select full_name, early_reason from wfh_live($1) where full_name = 'sita'`, [cid]);
+    expect(live).toEqual([{ full_name: "sita", early_reason: "Doctor's appointment" }]);
+    await sys(`update employees set reporting_manager_id = null where id = $1`, [E.sita]);
+  });
+
+  it("after the target, no reason is asked and nobody is notified", async () => {
+    const d = await today();
+    await sys(`insert into wfh_days (company_id, employee_id, date, status, source) values ($1, $2, $3::date, 'approved', 'hr')`, [cid, E.manager, d]);
+    await sys(`insert into work_sessions (company_id, employee_id, date, started_at) values ($1, $2, $3::date, now() - interval '9 hours')`, [cid, E.manager, d]);
+    await sys(`delete from notifications`);
+    await as("manager", `select wfh_check_out($1, null)`, [cid]);
+    expect(await sys(`select early_reason from work_sessions where employee_id = $1 and date = $2::date`, [E.manager, d])).toEqual([{ early_reason: null }]);
+    expect(await sys(`select * from notifications where title = 'Early check-out'`)).toHaveLength(0);
+  });
+});
+
 describe("ATT-31: forgotten check-out", () => {
   it("closes at the last recorded activity, raises the day and tells employee and manager", async () => {
-    await as("ravi", `select wfh_check_out($1, null)`, [cid]);                               // today's session from the tests above
     await sys(`insert into wfh_days (company_id, employee_id, date, status, source) values ($1, $2, '2026-10-21', 'approved', 'hr')`, [cid, E.ravi]);
     const [{ id }] = await sys<{ id: string }>(`insert into work_sessions (company_id, employee_id, date, started_at)
       values ($1, $2, '2026-10-21', '2026-10-21 09:05+05:30') returning id`, [cid, E.ravi]);
@@ -110,6 +143,40 @@ describe("ATT-31: forgotten check-out", () => {
     expect(s).toEqual({ ended: "13:30", end_reason: "auto" });                             // last activity: the end of the break
     expect((await sys<{ user_id: string }>(`select user_id from notifications order by user_id`)).map((r) => r.user_id).sort()).toEqual([U.ravi, U.manager].sort());
     expect(await sys(`select status from daily_attendance where employee_id = $1 and date = '2026-10-21'`, [E.ravi])).toEqual([{ status: "absent" }]);   // 3 h 55 m < half day
+  });
+});
+
+describe("ATT-21: on-site and field staff can't be marked as working from home", () => {
+  it("a correction to 'work from home' is refused for an employee who isn't eligible", async () => {
+    await expect(as("field", `insert into regularisations (company_id, employee_id, date, kind, reason) values ($1, $2, '2026-10-22', 'wfh', 'x')`, [cid, E.field]))
+      .rejects.toThrow(/isn't enabled/);
+    await as("field", `insert into regularisations (company_id, employee_id, date, kind, reason, in_time, out_time) values ($1, $2, '2026-10-22', 'missed_punch', 'Card not read', '09:00', '18:00')`, [cid, E.field]);
+    await as("sita", `insert into regularisations (company_id, employee_id, date, kind, reason) values ($1, $2, '2026-10-22', 'wfh', 'Forgot to check in')`, [cid, E.sita]);
+  });
+});
+
+describe("Selfie flags (0035, decision 27 Oct): HR or the manager flags, the employee explains", () => {
+  it("only HR or the reporting manager flag; the employee is told and explains; then it is closed", async () => {
+    // a past session with a check-in selfie (one session per day since 0043, so not today's)
+    await sys(`insert into wfh_days (company_id, employee_id, date, status, source) values ($1, $2, '2026-10-23', 'approved', 'hr')`, [cid, E.ravi]);
+    const [s] = await sys<{ id: string }>(`insert into work_sessions (company_id, employee_id, date, started_at, ended_at, end_reason, selfie_in)
+      values ($1, $2, '2026-10-23', '2026-10-23 09:00+05:30', '2026-10-23 18:00+05:30', 'checkout', $3) returning id`, [cid, E.ravi, `${cid}/${E.ravi}/in2.jpg`]);
+    await expect(as("sita", `select flag_selfie('wfh_in', $1, 'wrong_place', 'x')`, [s.id])).rejects.toThrow(/Only HR or the reporting manager/);
+    await expect(as("manager", `select flag_selfie('wfh_in', $1, 'wrong_place', '  ')`, [s.id])).rejects.toThrow(/Add a note/);
+    await sys(`delete from notifications`);
+    const [{ id }] = await as<{ id: string }>("manager", `select flag_selfie('wfh_in', $1, 'wrong_place', 'Looks like a cafe, not home') id`, [s.id]);
+    await expect(as("hr", `select flag_selfie('wfh_in', $1, 'other', 'again')`, [s.id])).rejects.toThrow(/already flagged/);
+    expect(await sys(`select title from notifications where user_id = $1`, [U.ravi])).toEqual([{ title: "Selfie flagged: please explain" }]);
+    expect(await as("ravi", `select reason, note, status from selfie_flags`)).toEqual([{ reason: "wrong_place", note: "Looks like a cafe, not home", status: "open" }]);
+    expect(await as("sita", `select * from selfie_flags`)).toHaveLength(0);
+    await expect(as("sita", `select explain_selfie_flag($1, 'not me')`, [id])).rejects.toThrow(/not allowed/);
+    await as("ravi", `select explain_selfie_flag($1, 'Power cut at home, worked from the cafe below')`, [id]);
+    expect(await sys(`select title from notifications where user_id = $1`, [U.manager])).toContainEqual({ title: "Selfie flag explained" });
+    await expect(as("ravi", `select close_selfie_flag($1, false, null)`, [id])).rejects.toThrow(/not allowed/);
+    await as("hr", `select close_selfie_flag($1, false, 'Fine this once')`, [id]);
+    expect(await sys(`select status from selfie_flags where id = $1`, [id])).toEqual([{ status: "accepted" }]);
+    expect((await sys<{ action: string }>(`select action from audit_log where table_name = 'selfie_flags' order by id`)).map((r) => r.action)).toEqual(["flag", "explain", "accept"]);
+    await expect(as("hr", `update selfie_flags set status = 'open' where id = $1 returning id`, [id])).resolves.toHaveLength(0);   // no direct writes
   });
 });
 

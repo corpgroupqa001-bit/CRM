@@ -13,11 +13,14 @@ export default async function Devices({ params }: { params: Promise<{ cid: strin
   const ctx = await getCtx(cid);
   requirePerm(ctx, "attendance.manage");
   const { supabase, perms } = ctx;
-  const [{ data: devices }, { data: branches }, { data: unmapped }, { data: people }] = await Promise.all([
+  const [{ data: devices }, { data: branches }, { data: unmapped }, { data: people }, { data: failures }] = await Promise.all([
     supabase.from("devices").select("*, branches(name)").eq("company_id", cid).order("name"),
     supabase.from("branches").select("id, name").eq("company_id", cid),
     supabase.from("punches_raw").select("device_id, device_user_id, punched_at").eq("company_id", cid).is("employee_id", null).order("punched_at", { ascending: false }).limit(1000),
     supabase.from("employee_directory").select("id, full_name, emp_code").eq("company_id", cid).in("status", ["active", "notice"]).order("first_name"),
+    // NFR-12: punches that couldn't be saved and failed background jobs, last 7 days
+    supabase.from("system_failures").select("kind, source, detail, at").eq("company_id", cid).in("kind", ["ingestion", "job"])
+      .gte("at", new Date(Date.now() - 7 * 864e5).toISOString()).order("at", { ascending: false }).limit(50),
   ]);
   // exceptions queue grouped by device + device user ID
   const queue = new Map<string, { device_id: string; device_user_id: string; count: number; last: string }>();
@@ -52,6 +55,18 @@ export default async function Devices({ params }: { params: Promise<{ cid: strin
             ))}
           </Table>
         </Card>
+
+        {!!failures?.length && (
+          <Card title={`Problems in the last 7 days (${failures.length})`} description="Punches a device sent that couldn't be saved, and background jobs that failed. HR and the Company Admin are alerted (at most once an hour per device)." pad={false}>
+            <Table head={["When", "What", "Device / job", "Detail"]}>
+              {failures.map((f, i) => (
+                <tr key={i}><td className="td whitespace-nowrap">{fmtDateTime(f.at)}</td>
+                  <td className="td"><Badge value="failed" text={f.kind === "ingestion" ? "Punches not saved" : "Job failed"} /></td>
+                  <td className="td font-medium">{f.source}</td><td className="td text-xs text-slate-600">{f.detail}</td></tr>
+              ))}
+            </Table>
+          </Card>
+        )}
 
         <Card title="Registered devices" pad={false}>
           <Table head={["Device", "Serial", "Branch", "Vendor / model", "Mode", "Status", "Last sync", "IP allow-list", ""]}>

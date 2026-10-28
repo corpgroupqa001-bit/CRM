@@ -63,7 +63,11 @@ export async function POST(req: Request) {
     p_ip: (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null,
   });
   if (error) {
-    if (error.code === "28000") return bad("unauthorized", 401);
+    // NFR-12: a registered device whose punches can't be stored is recorded and alerted (hourly at most)
+    const rejected = error.code === "28000";
+    await db.rpc("record_ingest_failure", { p_serial: device.serial_no,
+      p_detail: rejected ? "the device's key, signature or IP address was rejected" : error.message });
+    if (rejected) return bad("unauthorized", 401);
     console.error("[punch] ingest failed", p.device_id, error.message);
     return bad("Could not store the punch", 500);
   }

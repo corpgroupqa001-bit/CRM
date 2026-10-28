@@ -2,6 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { LOCK_WINDOW_MIN, lockedUntil, lockTimeText } from "@/lib/auth/lockout";
 
 export async function clientIp() {
   const h = await headers();
@@ -56,17 +57,29 @@ export async function recordLogin(userId: string, method: string) {
 export const PASSWORD_RULE = "At least 8 characters, including a number and a special character.";
 export const validPassword = (p: string) => p.length >= 8 && /\d/.test(p) && /[^A-Za-z0-9]/.test(p);
 
-export async function isLockedOut(email: string) {
-  const since = new Date(Date.now() - 15 * 60_000).toISOString();
-  const { data } = await createAdminClient().from("login_attempts").select("success, at")
-    .eq("email", email).gte("at", since).order("at", { ascending: false }).limit(10);
-  let failures = 0;
-  for (const a of data ?? []) {
-    if (a.success) break;
-    failures++;
-  }
-  return failures >= 5;
+/** the lock time for a login: the longest among the companies it belongs to (AUTH-02, 0041) */
+async function lockMinutesFor(email: string) {
+  const admin = createAdminClient();
+  const { data: p } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
+  if (!p) return LOCK_WINDOW_MIN;
+  const { data } = await admin.from("company_members").select("companies(lockout_minutes)").eq("user_id", p.id).eq("active", true);
+  return Math.max(LOCK_WINDOW_MIN, ...(data ?? []).map((m) => Number((m.companies as unknown as { lockout_minutes: number } | null)?.lockout_minutes ?? 0)));
 }
+
+/** when this login is locked until, or null when it isn't locked */
+export async function lockStatus(email: string): Promise<Date | null> {
+  const minutes = await lockMinutesFor(email);
+  const since = new Date(Date.now() - (minutes + LOCK_WINDOW_MIN) * 60_000).toISOString();
+  const { data } = await createAdminClient().from("login_attempts").select("success, at")
+    .eq("email", email).gte("at", since).order("at", { ascending: false }).limit(50);
+  return lockedUntil(data ?? [], minutes);
+}
+
+export const isLockedOut = async (email: string) => (await lockStatus(email)) !== null;
+
+/** the message a locked-out person sees */
+export const lockedMessage = (until: Date, extra = "") =>
+  `Too many wrong passwords. Try again after ${lockTimeText(until)}${extra}, or ask your administrator to unlock your account.`;
 
 export async function recordAttempt(email: string, success: boolean) {
   await createAdminClient().from("login_attempts").insert({ email, success, ip: await clientIp() });
