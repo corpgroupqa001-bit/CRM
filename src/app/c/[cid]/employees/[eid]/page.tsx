@@ -331,6 +331,12 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     );
   }
 
+  // the other companies this person works in, that this viewer also sees in full (0047)
+  const { data: elsewhere } = perms.has("employees.read_all")
+    ? await supabase.rpc("employee_other_companies", { p_company: cid })
+    : { data: [] };
+  const alsoIn = ((elsewhere ?? []) as { employee_id: string; company_name: string; emp_code: string; status: string }[]).filter((o) => o.employee_id === eid);
+
   return (
     <>
       <PageHeader
@@ -343,7 +349,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
         )}
       />
       <div className="mb-4 flex items-center gap-3"><Avatar name={fullName(e)} url={e.photo_url} size={48} />
-        <div className="text-sm text-slate-600">{e.email}{e.phone ? ` · ${e.phone}` : ""}<br />Joined {fmtDate(e.date_of_joining)}{e.user_id ? " · App access active" : e.invited_at ? ` · Invited ${fmtDate(e.invited_at)}` : " · Not invited yet"}</div>
+        <div className="text-sm text-slate-600">{e.email}{e.phone ? ` · ${e.phone}` : ""}<br />Joined {fmtDate(e.date_of_joining)}{e.user_id ? " · App access active" : e.invited_at ? ` · Invited ${fmtDate(e.invited_at)}` : " · Not invited yet"}
+          {alsoIn.length > 0 && <><br />🏢 Also works in: {alsoIn.map((o) => `${o.company_name} (${o.emp_code}, ${o.status[0].toUpperCase()}${o.status.slice(1)})`).join(" · ")}</>}</div>
       </div>
       <Tabs tabs={tabs} active={tab} />
       {body}
