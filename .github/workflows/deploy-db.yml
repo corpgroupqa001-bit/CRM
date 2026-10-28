@@ -2,6 +2,7 @@
 # Database changes go to staging first, live last:
 #   pull request touching supabase/**  → migrations applied to the STAGING project (secret STAGING_DB_URL)
 #   merge / push to main               → migrations applied to LIVE, then the webhook is deployed
+# Both wait for the full CI (lint, type-check, tests, build, migration guard) and do nothing if it fails.
 name: Deploy database
 
 on:
@@ -15,8 +16,12 @@ on:
       - ".github/workflows/**"
 
 jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
   staging:
     if: github.event_name == 'pull_request'
+    needs: checks
     runs-on: ubuntu-latest
     env:
       STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
@@ -36,6 +41,7 @@ jobs:
 
   migrate:
     if: github.event_name == 'push'
+    needs: checks              # a failed check leaves the live database untouched
     runs-on: ubuntu-latest
 
     env:

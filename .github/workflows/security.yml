@@ -1,0 +1,17 @@
+# Weekly check of the libraries the app ships for known security problems (high or critical).
+# A failure here emails the repository owner; nothing is changed automatically.
+name: Security audit
+on:
+  schedule: [{ cron: "30 3 * * 1" }]   # Mondays 09:00 IST
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Known vulnerabilities in production libraries
+        run: pnpm audit --prod --audit-level high

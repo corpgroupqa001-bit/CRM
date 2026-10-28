@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check:migrations": "node scripts/check-migrations.mjs origin/main",
     "seed": "tsx scripts/seed.ts",
     "db:push": "npx supabase db push",
     "functions:deploy": "npx supabase functions deploy punch-webhook --no-verify-jwt",

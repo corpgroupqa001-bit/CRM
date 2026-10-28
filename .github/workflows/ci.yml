@@ -1,9 +1,17 @@
-# Lint, type-check, unit tests and database/RLS isolation tests on every pull request.
+# Checks on every change. Nothing here touches staging or live.
+#   lint, type-check and every test (migrations, payroll scenarios, RLS isolation on PGlite)
+#   a production build, as the live site builds it
+#   the migration guard: migrations already on main are never edited, deleted or overtaken
+# Runs on pull requests, pushes to main and to the staging-work backup branch, every night, and before
+# the live database is changed (deploy-db.yml calls it and waits for it).
 name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, staging-work]
+  schedule: [{ cron: "30 20 * * *" }]   # 02:00 IST: catches breakage from tools or libraries overnight
+  workflow_call:
+  workflow_dispatch:
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -16,3 +24,36 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test        # includes migrations, payroll scenarios and RLS isolation tests (PGlite)
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # placeholders: the build doesn't connect to Supabase, it only needs the variables to exist
+      - run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      # compared with what is live: main before this push, or main itself for every other branch
+      - name: Migrations already applied are never changed
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] \
+             && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            base="${{ github.event.before }}"
+          else
+            base="origin/main"
+          fi
+          node scripts/check-migrations.mjs "$base"

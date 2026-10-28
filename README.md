@@ -111,7 +111,8 @@ Every change is tried on a separate Supabase project first; `main` is live.
 ## Tests
 
 ```bash
-pnpm test        # 233 tests, no Docker or hosted database needed
+pnpm test        # 289 tests, no Docker or hosted database needed
+pnpm check:migrations   # migrations already on main are never edited, deleted or overtaken
 pnpm lint && pnpm typecheck && pnpm build
 ```
 The tests load the **real migrations** into PGlite (Postgres compiled to WASM). They cover:
@@ -119,6 +120,15 @@ The tests load the **real migrations** into PGlite (Postgres compiled to WASM). 
 - **Attendance:** device ingestion (HMAC / API key, idempotency, exceptions queue), late marking, 3 lates → half-day, night shifts, regularisation, month lock, mobile geofence, and leave balances.
 - **RLS:** tenant isolation and the §4 role matrix.
 - **OTP rules:** 10-minute expiry, single use, 5 attempts, 60 s cooldown, 5 per hour.
+
+**GitHub Actions** run the same checks by themselves:
+
+| Workflow | When | What |
+|---|---|---|
+| `ci.yml` | pull requests, pushes to `main` and `staging-work`, nightly 02:00 IST | lint, type-check, all tests, a production build, the migration guard |
+| `deploy-db.yml` | pull request touching `supabase/**` → staging; push to `main` → live | waits for `ci.yml`; a failed check leaves the database untouched |
+| `security.yml` | Mondays 09:00 IST | `pnpm audit` of production libraries (high / critical) |
+| `backup.yml`, `archive.yml` | nightly, monthly | encrypted database backup, punch archive |
 
 ## Layout
 
