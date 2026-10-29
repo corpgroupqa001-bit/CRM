@@ -5,7 +5,7 @@ import { Badge, Card, Field, PageHeader, Table, Tabs } from "@/components/ui";
 import { fmtDate, fmtDateTime, label } from "@/lib/format";
 import { ASSIGNABLE_ROLES, PERMISSION_GROUPS, ROLE_LABEL, type Role } from "@/lib/rbac";
 import { LOCKOUT_CHOICES, lockoutLabel } from "@/lib/auth/lockout";
-import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, setMemberRole, cloneRole, saveRole, deleteRole, saveDefaultRole, resetDefaultRole } from "./actions";
+import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, saveSignInSecurity, setMemberRole, cloneRole, saveRole, deleteRole, saveDefaultRole, resetDefaultRole } from "./actions";
 
 export const metadata = { title: "Settings" };
 
@@ -331,6 +331,16 @@ export default async function Settings({ params, searchParams }: { params: Promi
   if (tab === "policies") {
     const m = company.payable_map;
     body = (
+      <div className="space-y-6">
+      {/* AUTH-02, on its own at the top so it is easy to find (decision of 29 Oct) */}
+      <Card title="Sign-in security" description="Five wrong passwords within 15 minutes lock the login. Owner, Company Admin and HR can unlock it sooner from Employees → name → Login & access → Unlock now.">
+        <ActionForm action={saveSignInSecurity.bind(null, cid)} className="flex flex-wrap items-end gap-3">
+          <Field label="Lock the login for" hint="Someone in several companies gets the longest lock time." className="min-w-0 flex-[0_1_280px]">
+            <select className="input" name="lockout_minutes" defaultValue={company.lockout_minutes} disabled={!admin}>
+              {LOCKOUT_CHOICES.map((n) => <option key={n} value={n}>{lockoutLabel(n)}{n === 15 ? " (standard)" : ""}</option>)}</select></Field>
+          {admin && <SubmitButton>Save</SubmitButton>}
+        </ActionForm>
+      </Card>
       <Card title="Attendance & payroll policies">
         <ActionForm action={savePolicies.bind(null, cid)} className="space-y-6">
           <fieldset disabled={!admin} className="space-y-6">
@@ -366,18 +376,11 @@ export default async function Settings({ params, searchParams }: { params: Promi
               </div>
               <p className="mt-2 text-xs text-slate-500">Paid leave counts as 1 and LOP leave as 0, from each leave type. Shifts are managed under Attendance → Shifts.</p>
             </div>
-            <div>
-              <div className="label">Sign-in security (AUTH-02)</div>
-              <div className="grid gap-4 md:grid-cols-3">
-                <Field label="Lock the login after 5 wrong passwords for" hint="Owner, Company Admin and HR can unlock it sooner from the employee's page. Someone in several companies gets the longest lock time.">
-                  <select className="input" name="lockout_minutes" defaultValue={company.lockout_minutes}>
-                    {LOCKOUT_CHOICES.map((n) => <option key={n} value={n}>{lockoutLabel(n)}{n === 15 ? " (standard)" : ""}</option>)}</select></Field>
-              </div>
-            </div>
             {admin && <SubmitButton>Save policies</SubmitButton>}
           </fieldset>
         </ActionForm>
       </Card>
+      </div>
     );
   }
 

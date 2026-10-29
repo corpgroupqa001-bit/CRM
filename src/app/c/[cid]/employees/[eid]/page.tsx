@@ -271,7 +271,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
             <SubmitButton className="btn-secondary">{e.user_id ? "Set password" : "Create login"}</SubmitButton>
           </ActionForm>
         </Card>
-        {e.user_id && <Card title="Sign-in" description={`Five wrong passwords in 15 minutes lock the login for ${lockoutLabel(ctx.company.lockout_minutes)} (Settings → Policies), or until someone here unlocks it.`}>
+        {e.user_id && <Card title="Sign-in" description={`Five wrong passwords in 15 minutes lock the login for ${lockoutLabel(ctx.company.lockout_minutes)}, or until someone here unlocks it.`}
+          actions={perms.has("settings.manage") && <Link href={`/c/${cid}/settings?tab=policies`} className="text-sm font-medium text-brand-600 hover:text-brand-700">Change lock time</Link>}>
           <div className="flex flex-wrap items-center gap-3">
             <Badge value={locked ? "blocked" : "active"} text={locked ? `Locked until ${lockTimeText(locked)}` : "Not locked"} />
             {locked && <ActionForm action={unlockLogin.bind(null, cid, eid)} className="flex items-center gap-2"><SubmitButton className="btn-secondary btn-sm">Unlock now</SubmitButton></ActionForm>}

@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertPerm, getCtx } from "@/lib/context";
 import { ASSIGNABLE_ROLES, type Role } from "@/lib/rbac";
-import { LOCKOUT_CHOICES } from "@/lib/auth/lockout";
+import { LOCKOUT_CHOICES, lockoutLabel } from "@/lib/auth/lockout";
 import { attempt, bool, must, numOrNull, str, type ActionState } from "@/lib/actions";
 
 const done = (cid: string, msg = "Saved.") => { revalidatePath(`/c/${cid}/settings`); return msg; };
@@ -54,9 +54,20 @@ export async function savePolicies(cid: string, _: ActionState, fd: FormData): P
       missed_out_grace_hours: numOrNull(fd, "missed_out_grace_hours") ?? 2,
       selfie_retention_days: numOrNull(fd, "selfie_retention_days") ?? 90,
       wfh_capture_gps: bool(fd, "wfh_capture_gps"),
-      lockout_minutes: LOCKOUT_CHOICES.find((m) => m === numOrNull(fd, "lockout_minutes")) ?? 15,
     }).eq("id", cid));
     return done(cid, "Policies saved.");
+  });
+}
+
+// AUTH-02 lock time, saved on its own from the Sign-in security box (decision of 29 Oct)
+export async function saveSignInSecurity(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "settings.manage");
+    const minutes = LOCKOUT_CHOICES.find((m) => m === numOrNull(fd, "lockout_minutes"));
+    if (!minutes) throw new Error("Choose a lock time from the list.");
+    must(await ctx.supabase.from("companies").update({ lockout_minutes: minutes }).eq("id", cid));
+    return done(cid, `Saved. A login is now locked for ${lockoutLabel(minutes)} after 5 wrong passwords.`);
   });
 }
 

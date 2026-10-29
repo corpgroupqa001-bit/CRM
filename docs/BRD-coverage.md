@@ -9,7 +9,7 @@ Database rules marked † are covered by automated tests (`pnpm test`, 233 tests
 | ID | Status | Where / note |
 |---|---|---|
 | AUTH-01 owner sign-up | ✅† | `/signup`: name, email, company name → (email code when verification is on) → password; the account owns the new company (`create_company_for`, 0028) |
-| AUTH-02 password rules + lockout | ✅ | 8+ chars, number, special; 5 failures in 15 min lock the login for the company's lock time (15 min default; 30 min, 1 h or 24 h in Settings → Policies, 0041), with "Try again after <time>"; administrator / HR **Unlock now** on the employee's Lifecycle tab (audited) |
+| AUTH-02 password rules + lockout | ✅ | 8+ chars, number, special; 5 failures in 15 min lock the login for the company's lock time (15 min default; 30 min, 1 h or 24 h in Settings → Policies, 0041), with "Try again after <time>"; administrator / HR **Unlock now** on the employee's Login & access tab (audited); the lock time has its own Sign-in security box at the top of Settings → Policies (decision of 29 Oct) |
 | AUTH-03 passwordless login | ◐ | built; needs SMTP and `EMAIL_VERIFICATION=on` |
 | AUTH-04 invitation + activation | ◐ | HR / Payroll and administrators invite (`employees.account`); employees no longer self-register (0028). Email needs SMTP |
 | AUTH-05 forgot password | ◐ | other sessions signed out; needs SMTP |
