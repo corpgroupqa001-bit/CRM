@@ -21,7 +21,7 @@ export default function ForgotPage() {
         </>
       ) : (
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          Ask your company admin or HR to set a new password for you: they can do it from <b>Employees → your profile → Access</b>.
+          Ask your company admin or HR to set a new password for you: they can do it from <b>Employees → your name → Login &amp; access</b>.
           Once you&apos;re signed in, you can change it any time under <b>Account &amp; security</b>.
         </div>
       )}

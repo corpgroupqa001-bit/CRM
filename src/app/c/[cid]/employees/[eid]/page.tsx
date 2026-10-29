@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCtx } from "@/lib/context";
@@ -12,6 +13,7 @@ import {
 import { lockStatus, PASSWORD_RULE } from "@/lib/auth/session";
 import { lockoutLabel, lockTimeText } from "@/lib/auth/lockout";
 import { JobFields, PersonalFields, StatutoryFields, jobOptions } from "../form-fields";
+import { PasswordInput } from "@/components/password-input";
 import { CompaniesTab } from "./companies-tab";
 
 export const metadata = { title: "Employee" };
@@ -43,6 +45,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
 
   const tabs = payOnly ? [{ key: "statutory", label: "Statutory & bank", href: `${base}?tab=statutory` }] : [
     { key: "profile", label: "Profile", href: `${base}?tab=profile` },
+    // everything about signing in, in one place (decision of 29 Oct)
+    ...(acct ? [{ key: "access", label: "Login & access", href: `${base}?tab=access` }] : []),
     ...(hr ? [{ key: "job", label: "Job", href: `${base}?tab=job` }] : []),
     { key: "statutory", label: "Statutory & bank", href: `${base}?tab=statutory` },
     { key: "documents", label: "Documents", href: `${base}?tab=documents` },
@@ -193,11 +197,6 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     const otherCompanies = (myCompanies ?? []).map((m) => m.companies as unknown as { id: string; name: string }).filter((c) => c.id !== cid);
     const { data: events } = await supabase.from("employee_events").select("*").eq("employee_id", eid).order("effective_date", { ascending: false });
     const act = lifecycle.bind(null, cid, eid);
-    // AUTH-02 / AUTH-15: lockout state and recent sign-ins (login history is readable by the Owner and Company Admin)
-    const [locked, { data: logins }] = e.user_id && acct
-      ? await Promise.all([lockStatus(String(e.email).toLowerCase()),
-          supabase.from("login_history").select("at, ip, user_agent, method").eq("user_id", e.user_id).order("at", { ascending: false }).limit(10)])
-      : [null, { data: null }];
     const sel = (name: string, rows: { id: string; name?: string; full_name?: string }[], cur: string | null) => (
       <select className="input" name={name} defaultValue={cur ?? ""}><option value="">—</option>{rows.map((r) => <option key={r.id} value={r.id}>{r.full_name ?? r.name}</option>)}</select>);
     body = (
@@ -232,42 +231,12 @@ export default async function EmployeePage({ params, searchParams }: { params: P
               <p className="mt-2 text-xs text-slate-500">The payroll run for the exit month adds leave encashment, gratuity (5+ years) and recovers advances — full and final settlement.</p></div>
           </ActionForm>
         </Card>
-        {acct && <Card title="Access">
-          <p className="mb-3 text-sm text-slate-600">Deactivating removes app access immediately and releases biometric IDs.</p>
-          <ActionForm action={act} confirm={e.status === "inactive" ? "Reactivate this employee?" : "Deactivate this employee now?"}>
-            <input type="hidden" name="kind" value={e.status === "inactive" ? "reactivated" : "deactivated"} />
-            <SubmitButton className={e.status === "inactive" ? "btn-secondary" : "btn-danger"}>{e.status === "inactive" ? "Reactivate" : "Deactivate"}</SubmitButton>
-          </ActionForm>
-        </Card>}
         {perms.has("employees.delete") && e.user_id !== ctx.user.id && <Card title="Remove employee">
           <p className="mb-3 text-sm text-slate-600">Ends their access immediately and hides them from every list. Their attendance and payroll history is kept; a record created by mistake is deleted completely.</p>
           <ActionForm action={removeEmployee.bind(null, cid, eid)} className="space-y-2" confirm="Remove this employee? They lose access straight away.">
             <input name="note" className="input" placeholder="Reason (optional)" />
             <SubmitButton className="btn-danger">Remove employee</SubmitButton>
           </ActionForm>
-        </Card>}
-        {acct && <Card title="Login password" description={e.user_id ? "Set a new password if they're locked out." : "Not activated yet: setting a password creates their login now."}>
-          <ActionForm action={setEmployeePassword.bind(null, cid, eid)} className="space-y-3" resetOnSuccess>
-            <Field label="New password" hint={PASSWORD_RULE}><input className="input" name="password" type="text" autoComplete="off" minLength={8} required /></Field>
-            <SubmitButton className="btn-secondary">{e.user_id ? "Set password" : "Create login"}</SubmitButton>
-          </ActionForm>
-        </Card>}
-        {acct && e.user_id && <Card title="Sign-in" description={`Five wrong passwords in 15 minutes lock the login for ${lockoutLabel(ctx.company.lockout_minutes)} (Settings → Policies), or until someone here unlocks it.`}>
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge value={locked ? "blocked" : "active"} text={locked ? `Locked until ${lockTimeText(locked)}` : "Not locked"} />
-            {locked && <ActionForm action={unlockLogin.bind(null, cid, eid)} className="flex items-center gap-2"><SubmitButton className="btn-secondary btn-sm">Unlock now</SubmitButton></ActionForm>}
-          </div>
-          {logins && (
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Recent sign-ins</div>
-              {logins.length ? (
-                <ul className="divide-y divide-slate-100 text-sm">
-                  {logins.map((l, i) => <li key={i} className="flex flex-wrap justify-between gap-2 py-2"><span className="text-slate-700">{fmtDateTime(l.at)} · {label(l.method ?? "password")}</span>
-                    <span className="max-w-full truncate text-xs text-slate-500" title={l.user_agent ?? ""}>{l.ip ?? "—"}</span></li>)}
-                </ul>
-              ) : <p className="text-sm text-slate-500">No sign-ins yet.</p>}
-            </div>
-          )}
         </Card>}
         {acct && otherCompanies.length > 0 && (
           <Card title="Transfer to another company">
@@ -284,6 +253,48 @@ export default async function EmployeePage({ params, searchParams }: { params: P
               <td className="td text-xs text-slate-500">{ev.details?.note ?? ""}</td></tr>)}
           </Table>
         </Card>
+      </div>
+    );
+  }
+
+  if (tab === "access" && acct) {
+    // AUTH-02 / AUTH-15: lockout state and recent sign-ins (login history is readable by the Owner and Company Admin)
+    const [locked, { data: logins }] = e.user_id
+      ? await Promise.all([lockStatus(String(e.email).toLowerCase()),
+          supabase.from("login_history").select("at, ip, user_agent, method").eq("user_id", e.user_id).order("at", { ascending: false }).limit(10)])
+      : [null, { data: null }];
+    body = (
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card title="Login password" description={e.user_id ? "Set a new password if they're locked out." : "Not activated yet: setting a password creates their login now."}>
+          <ActionForm action={setEmployeePassword.bind(null, cid, eid)} className="space-y-3" resetOnSuccess>
+            <Field label="New password" hint={PASSWORD_RULE}><PasswordInput name="password" autoComplete="new-password" minLength={8} required /></Field>
+            <SubmitButton className="btn-secondary">{e.user_id ? "Set password" : "Create login"}</SubmitButton>
+          </ActionForm>
+        </Card>
+        {e.user_id && <Card title="Sign-in" description={`Five wrong passwords in 15 minutes lock the login for ${lockoutLabel(ctx.company.lockout_minutes)} (Settings → Policies), or until someone here unlocks it.`}>
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge value={locked ? "blocked" : "active"} text={locked ? `Locked until ${lockTimeText(locked)}` : "Not locked"} />
+            {locked && <ActionForm action={unlockLogin.bind(null, cid, eid)} className="flex items-center gap-2"><SubmitButton className="btn-secondary btn-sm">Unlock now</SubmitButton></ActionForm>}
+          </div>
+          {logins && (
+            <div className="mt-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Recent sign-ins</div>
+              {logins.length ? (
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {logins.map((l, i) => <li key={i} className="flex flex-wrap justify-between gap-2 py-2"><span className="text-slate-700">{fmtDateTime(l.at)} · {label(l.method ?? "password")}</span>
+                    <span className="max-w-full truncate text-xs text-slate-500" title={l.user_agent ?? ""}>{l.ip ?? "—"}</span></li>)}
+                </ul>
+              ) : <p className="text-sm text-slate-500">No sign-ins yet.</p>}
+            </div>
+          )}
+        </Card>}
+        {hr && <Card title="App access">
+          <p className="mb-3 text-sm text-slate-600">Deactivating removes app access immediately and releases biometric IDs.</p>
+          <ActionForm action={lifecycle.bind(null, cid, eid)} confirm={e.status === "inactive" ? "Reactivate this employee?" : "Deactivate this employee now?"}>
+            <input type="hidden" name="kind" value={e.status === "inactive" ? "reactivated" : "deactivated"} />
+            <SubmitButton className={e.status === "inactive" ? "btn-secondary" : "btn-danger"}>{e.status === "inactive" ? "Reactivate" : "Deactivate"}</SubmitButton>
+          </ActionForm>
+        </Card>}
       </div>
     );
   }
@@ -353,7 +364,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
           {alsoIn.length > 0 && <><br />🏢 Also works in: {alsoIn.map((o) => `${o.company_name} (${o.emp_code}, ${o.status[0].toUpperCase()}${o.status.slice(1)})`).join(" · ")}</>}</div>
       </div>
       <Tabs tabs={tabs} active={tab} />
-      {body}
+      {/* a fresh form per tab: otherwise the browser keeps the previous tab's typed values in the reused boxes */}
+      <Fragment key={tab}>{body}</Fragment>
     </>
   );
 }

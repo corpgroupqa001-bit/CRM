@@ -21,7 +21,7 @@ type Assignment = {
 export async function CompaniesTab({ ctx, eid, userId, self }: { ctx: Ctx; eid: string; userId: string | null; self: boolean }) {
   const { supabase, companyId: cid } = ctx;
   if (!userId) {
-    return <Card title="Companies assigned"><p className="text-sm text-slate-600">This employee has no login yet. Create their login (Lifecycle → Login password) or send an invite first; one login is then used for every company they&apos;re assigned to.</p></Card>;
+    return <Card title="Companies assigned"><p className="text-sm text-slate-600">This employee has no login yet. Create their login (Login &amp; access → Login password) or send an invite first; one login is then used for every company they&apos;re assigned to.</p></Card>;
   }
   if (self) {
     return <Card title="Companies assigned"><p className="text-sm text-slate-600">You can&apos;t change your own company access.</p></Card>;
