@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, Bell, BellOff, Check, CheckCheck, CornerUpLeft, Forward, ListPlus, Mic, Paperclip, Pencil, Pin, PinOff, Send,
@@ -47,6 +48,7 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
   initialMessages: Msg[]; initialMembers: Member[]; muted: boolean; starred: string[]; forwardTargets: { id: string; name: string }[];
 }) {
   const supabase = useRef(createClient()).current;
+  const router = useRouter();
   const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [stars, setStars] = useState<Set<string>>(new Set(starred));
@@ -69,9 +71,11 @@ export function Conversation({ cid, convId, kind, title, meId, names, initialMes
     setMessages((list) => list.some((x) => x.id === m.id) ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m]);
   }, []);
 
+  // read now: the chat list's count for this chat and the Chat menu badge clear (decision of 29 Oct)
   const markRead = useCallback(async () => {
     await supabase.from("conversation_members").update({ last_read_at: new Date().toISOString() }).eq("conversation_id", convId).eq("user_id", meId);
-  }, [supabase, convId, meId]);
+    router.refresh();
+  }, [supabase, convId, meId, router]);
 
   useEffect(() => {
     markRead();

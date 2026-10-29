@@ -9,12 +9,13 @@ export default async function CompanyLayout({ children, params }: { children: Re
   const ctx = await getCtx(cid);
   const { supabase, user, role, customRole, perms, company, employee } = ctx;
 
-  const [{ data: memberships }, { data: myRecords }, { count: unread }, { data: profile }, { data: superAdmin }] = await Promise.all([
+  const [{ data: memberships }, { data: myRecords }, { count: unread }, { data: profile }, { data: superAdmin }, { data: chatUnread }] = await Promise.all([
     supabase.from("company_members").select("role, companies(id, name)").eq("user_id", user.id).eq("active", true),
     supabase.from("employees").select("company_id, status, removed_at").eq("user_id", user.id),
     supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("read_at", null).neq("kind", "chat"),
     supabase.from("profiles").select("full_name, idle_timeout_min, last_company_id").eq("id", user.id).maybeSingle(),
     supabase.rpc("is_super_admin"),
+    perms.has("chat.use") ? supabase.rpc("chat_unread", { p_company: cid }) : Promise.resolve({ data: 0 }),
   ]);
   if (profile && profile.last_company_id !== cid) {
     await supabase.from("profiles").update({ last_company_id: cid }).eq("id", user.id);
@@ -37,6 +38,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
       canAddCompany={!!superAdmin}
       isOwner={companies.some((c) => c.role === "owner")}
       unread={unread ?? 0}
+      chatUnread={chatUnread ?? 0}
       userId={user.id}
       idleMinutes={profile?.idle_timeout_min ?? 30}
       logout={logout}

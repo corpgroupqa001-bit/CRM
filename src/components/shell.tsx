@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bell, Building2, CalendarCheck, Check, ChevronsUpDown, CornerDownLeft, Fingerprint, FolderKanban, IndianRupee,
   LayoutDashboard, ListChecks, LogOut, Megaphone, Menu, MessageSquare, Plane, Receipt, Search, Settings, UserCircle,
@@ -31,6 +31,8 @@ type Props = {
   /** owners create further companies themselves (BRD COM-01) */
   isOwner?: boolean;
   unread: number;
+  /** chats with unread messages in this company, for the Chat menu badge (0048, 0050) */
+  chatUnread: number;
   userId: string;
   idleMinutes: number;
   logout: () => Promise<void>;
@@ -38,6 +40,7 @@ type Props = {
 };
 
 type Hit = { type: string; title: string; sub: string; href: string };
+type ChatToast = { id: string; title: string; body: string; href: string };
 
 export function Shell(p: Props) {
   const path = usePathname();
@@ -46,21 +49,51 @@ export function Shell(p: Props) {
   const [switcher, setSwitcher] = useState(false);
   const [menu, setMenu] = useState(false);
   const [unread, setUnread] = useState(p.unread);
+  const [chatUnread, setChatUnread] = useState(p.chatUnread);
+  const [toasts, setToasts] = useState<ChatToast[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const base = `/c/${p.companyId}/`;
 
   useEffect(() => setUnread(p.unread), [p.unread]);
+  useEffect(() => setChatUnread(p.chatUnread), [p.chatUnread]);
   useEffect(() => { setOpen(false); setMenu(false); setSwitcher(false); }, [path]);
 
-  // live notification count (Supabase Realtime, RLS-filtered)
+  // Chat menu badge (COMMS-07, decision of 29 Oct): recounted when a message arrives, a chat is opened
+  // (its last_read_at moves) or the page changes
+  const hasChat = p.nav.some((n) => n.href === "chat");
+  const { companyId } = p;
+  const recountChat = useCallback(() => {
+    if (!hasChat) return;
+    createClient().rpc("chat_unread", { p_company: companyId }).then(({ data }) => { if (typeof data === "number") setChatUnread(data); });
+  }, [hasChat, companyId]);
+  useEffect(() => { recountChat(); }, [path, recountChat]);
+  const pathRef = useRef(path);
+  useEffect(() => { pathRef.current = path; }, [path]);
+
+  // live notification count (Supabase Realtime, RLS-filtered); a chat message pops up instead, unless
+  // that chat is already open on screen
   useEffect(() => {
     const supabase = createClient();
     const ch = supabase.channel(`notif-${p.userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${p.userId}` },
-        (payload) => { if ((payload.new as { kind?: string }).kind !== "chat") setUnread((n) => n + 1); })
-      .subscribe();
+        (payload) => {
+          const n = payload.new as { id: string; kind?: string; title: string; body: string | null; link: string | null; company_id: string };
+          if (n.kind !== "chat") return setUnread((c) => c + 1);
+          if (n.company_id !== companyId) return;
+          const href = `/c/${companyId}${n.link ?? "/chat"}`;
+          if (pathRef.current !== href) {
+            setToasts((t) => [...t.filter((x) => x.href !== href), { id: n.id, title: n.title, body: n.body ?? "", href }].slice(-3));
+            setTimeout(() => setToasts((t) => t.filter((x) => x.id !== n.id)), 6000);
+          }
+          setTimeout(recountChat, 800);   // after an open chat has marked it read
+        })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversation_members", filter: `user_id=eq.${p.userId}` }, () => recountChat());
+    // the live connection must carry the signed-in session, or row security hides every row from it; the browser
+    // client doesn't hand the session (read from the cookie) to Realtime by itself. One shared client, so every
+    // live view on the page (chat, attendance, WFH) gets it too.
+    supabase.realtime.setAuth().then(() => ch.subscribe());
     return () => { supabase.removeChannel(ch); };
-  }, [p.userId]);
+  }, [p.userId, companyId, recountChat]);
 
   // AUTH-12: sign out after the idle timeout (default 30 min)
   const { logout, idleMinutes } = p;
@@ -153,6 +186,11 @@ export function Shell(p: Props) {
                   <NavLink key={n.href} href={href} aria-current={on ? "page" : undefined}
                     className={`group flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium transition ${on ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
                     <Icon className={`h-[18px] w-[18px] ${on ? "text-brand-600" : "text-slate-400 group-hover:text-slate-600"}`} /> {n.label}
+                    {n.href === "chat" && chatUnread > 0 && (
+                      <span className="ml-auto min-w-[20px] rounded-full bg-danger px-1.5 text-center text-[11px] font-semibold leading-5 text-white" aria-label={`${chatUnread} ${chatUnread === 1 ? "chat" : "chats"} with unread messages`}>
+                        {chatUnread > 99 ? "99+" : chatUnread}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}
@@ -230,7 +268,15 @@ export function Shell(p: Props) {
           return (
             <NavLink key={n.href} href={href} aria-current={on ? "page" : undefined}
               className={`flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium ${on ? "text-brand-700" : "text-slate-500"}`}>
-              <Icon className="h-[22px] w-[22px]" /><span className="max-w-full truncate px-1">{n.href === "dashboard" ? "Home" : n.label.replace(/^My /, "")}</span>
+              <span className="relative">
+                <Icon className="h-[22px] w-[22px]" />
+                {n.href === "chat" && chatUnread > 0 && (
+                  <span className="absolute -right-2.5 -top-1.5 min-w-[18px] rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-[18px] text-white ring-2 ring-surface" aria-label={`${chatUnread} ${chatUnread === 1 ? "chat" : "chats"} with unread messages`}>
+                    {chatUnread > 99 ? "99+" : chatUnread}
+                  </span>
+                )}
+              </span>
+              <span className="max-w-full truncate px-1">{n.href === "dashboard" ? "Home" : n.label.replace(/^My /, "")}</span>
             </NavLink>
           );
         })}
@@ -238,6 +284,22 @@ export function Shell(p: Props) {
           <Menu className="h-[22px] w-[22px]" /><span>More</span>
         </button>
       </nav>
+      {toasts.length > 0 && (
+        <div className="no-print fixed right-3 top-[68px] z-50 flex w-[min(22rem,calc(100vw-1.5rem))] flex-col gap-2 lg:right-6" role="status" aria-live="polite">
+          {toasts.map((t) => (
+            <div key={t.id} className="flex items-start gap-3 rounded-[14px] border border-slate-200 bg-surface p-3 shadow-(--shadow-pop)">
+              <Link href={t.href} onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))} className="flex min-w-0 flex-1 items-start gap-3">
+                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600"><MessageSquare className="h-4 w-4" /></span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-slate-900">{t.title}</span>
+                  <span className="block truncate text-sm text-slate-600">{t.body}</span>
+                </span>
+              </Link>
+              <button onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close"><X className="h-4 w-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
       {searchOpen && <SearchPalette companyId={p.companyId} nav={p.nav.map((n) => ({ ...n, href: base + n.href }))} onClose={() => setSearchOpen(false)} />}
     </div>
   );
