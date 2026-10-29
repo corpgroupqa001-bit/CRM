@@ -19,7 +19,12 @@ export default async function OwnerPage({ searchParams }: { searchParams: Promis
   const supabase = await createClient();
   const today = todayIST();
 
-  const { data: members } = await supabase.from("company_members").select("company_id, role").eq("user_id", user.id).eq("active", true);
+  const [{ data: members }, { data: profile }] = await Promise.all([
+    supabase.from("company_members").select("company_id, role").eq("user_id", user.id).eq("active", true),
+    supabase.from("profiles").select("last_company_id").eq("id", user.id).maybeSingle(),
+  ]);
+  // the logo opens the dashboard of the company used last (else the first one), as after sign-in
+  const home = (members ?? []).find((m) => m.company_id === profile?.last_company_id) ?? members?.[0];
   const ids = (members ?? []).filter((m) => ["owner", "company_admin"].includes(m.role)).map((m) => m.company_id);
 
   const [{ data: companies }, { data: emps }, { data: att }, { data: branches }, { data: runs }, { data: tasks }] = await Promise.all([
@@ -51,9 +56,9 @@ export default async function OwnerPage({ searchParams }: { searchParams: Promis
   return (
     <div className="min-h-screen">
       <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-surface px-6">
-        <div className="flex items-center gap-2 font-semibold text-brand-900">
+        <Link href={home ? `/c/${home.company_id}/dashboard` : "/"} aria-label="Go to dashboard" className="flex items-center gap-2 font-semibold text-brand-900">
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-xs text-white">cg</span>corpgroup.com
-        </div>
+        </Link>
         <div className="flex items-center gap-2">
           <Link href="/account" className="btn-ghost">Account</Link>
           <form action={logout}><button className="btn-ghost">Sign out</button></form>

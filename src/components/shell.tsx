@@ -93,10 +93,10 @@ export function Shell(p: Props) {
 
   const sidebar = (
     <nav className="flex h-full flex-col bg-surface" aria-label="Main">
-      <div className="flex items-center gap-2.5 px-4 pb-1 pt-4 text-[15px] font-semibold text-slate-900">
+      <Link href={`/c/${p.companyId}/dashboard`} aria-label="Go to dashboard" className="flex items-center gap-2.5 px-4 pb-1 pt-4 text-[15px] font-semibold text-slate-900">
         <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-[11px] font-bold text-white">cg</span>
         corpgroup.com
-      </div>
+      </Link>
       <div className="relative px-3 pb-2 pt-3">
         <button onClick={() => setSwitcher((s) => !s)} aria-expanded={switcher}
           className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-slate-300">
