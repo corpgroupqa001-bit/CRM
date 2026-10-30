@@ -35,7 +35,7 @@ export const PERMISSION_GROUPS: { module: string; perms: [Perm, string][] }[] = 
     ["employees.assign_role", "Change people's roles"]] },
   { module: "Attendance & leave", perms: [
     ["attendance.read_all", "See everyone's attendance"], ["attendance.read_team", "See their team's attendance"],
-    ["attendance.manage", "Correct attendance, manage devices and WFH"], ["attendance.approve", "Approve corrections and leave"],
+    ["attendance.manage", "Correct attendance and manage devices"], ["attendance.approve", "Approve corrections and leave"],
     ["attendance.unlock", "Unlock a locked month"], ["leave.manage", "Manage leave types and balances"]] },
   { module: "Payroll", perms: [
     ["salaries.read", "See salaries and payroll"], ["salaries.manage", "Prepare payroll and salary structures"],

@@ -258,7 +258,7 @@ Every user has one role **per company** in `company_members.role`: `owner`, `hr`
 | Companies | Edit profile; more companies are created by the Super Admin | Read | Read | Read |
 | Projects | Full | Read all | Read; update the projects they manage | Member projects (read) |
 | Employees | Full, incl. system roles | Create, read, update, delete, invite, logins (no system roles) | Own team (read) | Own profile (read, update contact fields) |
-| Attendance | Full; the only role that unlocks a month | Full (no unlock) | Team: read, approve | Own; punch / WFH check-in |
+| Attendance | Full; the only role that unlocks a month | Full (no unlock) | Team: read, approve | Own; punch on the device |
 | Leave | Full | Full | Team: read, approve | Apply, read own |
 | Salaries / Payroll | Read, approve, reopen | Prepare: structures, CTC, inputs, run, bank file | Own payslips | Own payslips |
 | Tasks | Full | Full | Full for their team | Assigned tasks; create tasks for themselves |
@@ -307,12 +307,10 @@ flowchart TD
   D1[Device push<br/>POST /functions/v1/punch-webhook<br/>or /api/punch] --> ING["ingest_punches()<br/>HMAC or API key, IP allow-list"]
   D2[Single punch<br/>POST /api/attendance/punch] --> ING
   AG[Sync agent<br/>CSV → queue → retry] --> D1
-  MOB[Mobile punch<br/>selfie + GPS] --> MP["mobile_punch()<br/>geofence check"]
   CSV[HR CSV import] --> IP["import_punches()"]
   REG[Approved regularisation] --> RP[regularisation punches]
 
   ING --> PR[("punches_raw<br/>immutable, idempotent")]
-  MP --> PR
   IP --> PR
   RP --> PR
 

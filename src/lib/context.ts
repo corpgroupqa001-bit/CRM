@@ -24,7 +24,7 @@ export type Company = {
   late_marks_to_half_day: number; payable_map: Record<string, number>; status: string; plan: string; timezone: string;
   owner_id: string; fy_start_month: number; renewal_date: string | null; employee_limit: number | null;
   payslip_password: boolean; chat_cross_dept: boolean; chat_retention_days: number; lockout_minutes: number;
-  missed_out_grace_hours?: number; selfie_retention_days?: number; wfh_capture_gps?: boolean;
+  missed_out_grace_hours?: number; selfie_retention_days?: number;
 };
 
 // exactly the Company fields pages use (no select("*"): skips internals like next_emp_seq and timestamps)
@@ -47,7 +47,7 @@ export const getCtx = cache(async (companyId: string) => {
   const [{ data: access, error: accessError }, { data: company }, { data: employee }] = await Promise.all([
     supabase.rpc("my_access", { cid: companyId }),
     supabase.from("companies").select(COMPANY_COLUMNS).eq("id", companyId).maybeSingle(),
-    supabase.from("employees").select("id, first_name, last_name, emp_code, branch_id, department_id, mobile_attendance, status, photo_url")
+    supabase.from("employees").select("id, first_name, last_name, emp_code, branch_id, department_id, status, photo_url")
       .eq("company_id", companyId).eq("user_id", user.id).maybeSingle(),
   ]);
   // fail closed: if the permission check itself fails (e.g. migration 0018 not applied), nobody gets in

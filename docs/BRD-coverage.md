@@ -39,14 +39,14 @@ Database rules marked † are covered by automated tests (`pnpm test`, 233 tests
 ## EMP — employees
 EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles stay with the Owner). Rejected submits keep everything typed. **Addition by decision (27 Oct):** on Add employee an Owner / Company Admin picks someone from their other companies and adds them (kept in both) or moves them (out of chosen / all companies), copying only basic details (0036). **Addition by decision (28 Oct):** the Owner, Company Admin and HR see which other companies a person works in (Employees list column and filter, employee page), only for companies they can see in full (0047).
 
-## ATT — attendance, leave, work from home
+## ATT — attendance and leave (on site only; work from home and mobile punch removed 30 Oct, 0054)
 | ID | Status | Where / note |
 |---|---|---|
 | ATT-01 vendors | ◐ | generic push contract + CSV sync agent; vendor connectors after OI-01 |
 | ATT-02 push / pull | ◐ | push ✅†; pull via the sync agent |
-| ATT-03 … ATT-16 | ✅† | device registry + offline alert, immutable idempotent punches, exceptions queue, shifts, statuses, OT, late rule, field selfie + geofence, regularisation, live board, month lock (the Owner unlocks), reports. **Addition by decision (27 Oct):** every employee sees "Who's in today" on the dashboard, Present / Not in yet only, never the reason (0042) |
+| ATT-03 … ATT-16 | ✅† | device registry + offline alert, immutable idempotent punches, exceptions queue, shifts, statuses, OT, late rule, field selfie + geofence, regularisation, live board, month lock (the Owner unlocks), reports. **Addition by decision (27 Oct):** every employee sees "Who's in today" on the dashboard, Present / Not in yet only, never the reason (0042). **ATT-12 field / mobile punch removed by decision of 30 Oct 2026 (0054): device punches only.** |
 | ATT-17 … ATT-19 leave | ✅† | switched on (0027) |
-| ATT-20 … ATT-35 work from home | ✅† | 0030: requests / approvals / HR ranges, eligibility, live-camera selfie check-in/out, breaks, server time, live timer (home + My attendance) and team board via Realtime, auto-close, WFH report. GPS only when enabled. **Changed by decision (27 Oct), against ATT-32:** one session per WFH day; after check-out Check in is hidden and refused, a mistaken check-out is corrected by a correction request (0043). "Start your break now?" confirmation. **Addition by decision (27 Oct):** checking out before the target shows the time left and requires a reason, which the reporting manager is notified of and sees on the live board (0044) |
+| ATT-20 … ATT-35 work from home | ✗ by decision | **Removed by decision of 30 Oct 2026 (0054): on-site work only.** No work-from-home requests, check-ins, breaks, live WFH board or WFH report; nobody can be made eligible; past WFH days and sessions are kept as history. (Built earlier in 0030, 0033, 0035, 0043, 0044.) |
 | ATT-25 selfie access + retention | ✅ | visible only to HR / Payroll and the reporting manager (employee attendance page → Selfies); deleted after the company retention (default 90 days) by `/api/cron/retention`. **Addition by decision (27 Oct):** they can flag a selfie (wrong person / place); the employee explains; HR or the manager accepts or upholds (0035) |
 | ATT-36 missed out-punch | ✅† | after shift end + company grace (default 2 h), unpaid until regularised, employee notified (0029) |
 

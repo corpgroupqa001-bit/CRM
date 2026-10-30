@@ -81,7 +81,7 @@ pnpm email:test you@example.com   # connects, logs in, sends a test email, expla
 ## Trying the main flow
 
 1. Sign up at **/signup**. The 6-digit code appears in the server console; enter it, then set a password.
-2. Go to **Settings**: add a branch (with lat/lng if you want mobile punch) and check the **Policies** tab.
+2. Go to **Settings**: add a branch and check the **Policies** tab.
 3. Go to **Employees → Add employee** (or **Bulk import**). The invite link is printed in the console.
 4. Go to **Attendance → Devices** and register a device. Copy the HMAC secret, map the device user ID on the employee, then send a punch:
    ```bash

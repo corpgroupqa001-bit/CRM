@@ -26,7 +26,7 @@ describe("missed check-out (ATT-36)", () => {
   });
 
   it("a past day with only an in-punch is a missed punch, unpaid, and the employee is notified once", async () => {
-    await sys(`insert into punches_raw (company_id, employee_id, punched_at, source) values ($1, $2, '2026-10-06 09:02+05:30', 'mobile')`, [cid, emp]);
+    await sys(`insert into punches_raw (company_id, employee_id, punched_at, source) values ($1, $2, '2026-10-06 09:02+05:30', 'device')`, [cid, emp]);
     await sys(`select compute_attendance_day($1, '2026-10-06')`, [emp]);
     expect(await status("2026-10-06")).toBe("missed_punch");
     const [{ pay }] = await sys<{ pay: string }>(`select payable_map ->> 'missed_punch' pay from companies where id = $1`, [cid]);
@@ -37,7 +37,7 @@ describe("missed check-out (ATT-36)", () => {
   });
 
   it("with both punches the day is computed normally and nobody is notified", async () => {
-    await sys(`insert into punches_raw (company_id, employee_id, punched_at, source) values ($1, $2, '2026-10-07 09:00+05:30', 'mobile'), ($1, $2, '2026-10-07 18:05+05:30', 'mobile')`, [cid, emp]);
+    await sys(`insert into punches_raw (company_id, employee_id, punched_at, source) values ($1, $2, '2026-10-07 09:00+05:30', 'device'), ($1, $2, '2026-10-07 18:05+05:30', 'device')`, [cid, emp]);
     await sys(`select compute_attendance_day($1, '2026-10-07')`, [emp]);
     expect(await status("2026-10-07")).toBe("present");
     expect(await sys(`select * from notifications where user_id = $1 and body like '07 Oct%'`, [user])).toHaveLength(0);

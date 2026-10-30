@@ -138,16 +138,13 @@ describe("device ingestion (ATT-02/04/05/06/07)", () => {
     expect(log).toHaveLength(1);
   });
 
-  it("mobile punch enforces the branch geofence (ATT-12)", async () => {
+  it("mobile punch is switched off: attendance is on site only (decision of 30 Oct, 0054)", async () => {
     const user = await createUser(db, "ravi@acme.in");
-    const [b] = await q<{ id: string }>(
-      `insert into branches (company_id, name, lat, lng, geofence_m) values ($1, 'HQ', 17.4400, 78.3489, 200) returning id`, [company]);
-    await q(`update employees set user_id = $1, branch_id = $2, mobile_attendance = true where id = $3`, [user, b.id, emp]);
+    await q(`update employees set user_id = $1 where id = $2`, [user, emp]);
+    await expect(q(`update employees set mobile_attendance = true where id = $1`, [emp])).rejects.toThrow(/employees_on_site_only/);
     await q(`insert into company_members (company_id, user_id, role) values ($1, $2, 'employee')`, [company, user]);
     const asRavi = <T>(sql: string, p: unknown[]) => asOwnerUser(db, user, async () => (await db.query<T>(sql, p)).rows);
-    await expect(asRavi(`select mobile_punch($1, 17.4500, 78.3489, null)`, [company])).rejects.toThrow(/outside the 200 m geofence/);
-    const ok = await asRavi<{ mobile_punch: { distance_m: number } }>(`select mobile_punch($1, 17.4401, 78.3490, null)`, [company]);
-    expect(ok[0].mobile_punch.distance_m).toBeLessThan(200);
+    await expect(asRavi(`select mobile_punch($1, 17.4401, 78.3490, null)`, [company])).rejects.toThrow();
   });
 });
 

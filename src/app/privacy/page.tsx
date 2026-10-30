@@ -11,7 +11,7 @@ export default function Privacy() {
       <p className="mt-2 text-sm text-slate-500">Under the Digital Personal Data Protection Act, 2023 (India)</p>
       <div className="mt-8 space-y-6 text-[15px] leading-relaxed">
         <section><h2 className="font-semibold text-slate-900">What we collect</h2>
-          <p>Your name, contact details, job details, attendance punches (device user IDs, times and, for mobile punches, a selfie and location), leave, salary and statutory details (PAN, Aadhaar, UAN, bank account), work tasks and messages.</p></section>
+          <p>Your name, contact details, job details, attendance punches (device user IDs and times; older work-from-home and mobile punches also kept a selfie and location), leave, salary and statutory details (PAN, Aadhaar, UAN, bank account), work tasks and messages.</p></section>
         <section><h2 className="font-semibold text-slate-900">What we don&apos;t collect</h2>
           <p>We never store fingerprint or face templates. Biometric devices keep those; we receive only a device user ID and the punch time.</p></section>
         <section><h2 className="font-semibold text-slate-900">Why</h2>

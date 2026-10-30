@@ -167,7 +167,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             {(branches ?? []).map((b) => (
               <tr key={b.id}>
                 <td className="td font-medium">{b.name}</td><td className="td">{b.address}</td>
-                <td className="td text-xs">{b.lat != null ? `${b.lat}, ${b.lng}` : <span className="text-amber-600">Not set (needed for mobile punch)</span>}</td>
+                <td className="td text-xs">{b.lat != null ? `${b.lat}, ${b.lng}` : <span className="text-slate-500">Not set</span>}</td>
                 <td className="td">{b.geofence_m} m</td>
                 <td className="td text-right">{admin && <form action={deleteRow.bind(null, cid, "branches", b.id)}><button className="text-sm text-rose-600">Delete</button></form>}</td>
               </tr>
@@ -358,7 +358,6 @@ export default async function Settings({ params, searchParams }: { params: Promi
               <Field label="Overtime multiplier"><input className="input" name="ot_multiplier" type="number" step="0.25" min={1} defaultValue={company.ot_multiplier} /></Field>
               <Field label="Late marks that make a half-day" hint="0 turns the rule off"><input className="input" name="late_marks_to_half_day" type="number" min={0} defaultValue={company.late_marks_to_half_day} /></Field>
               <Field label="Missed check-out after (hours past shift end)" hint="A day with an in-punch and no out-punch is flagged then and the employee is asked to request a correction (ATT-36)"><input className="input" name="missed_out_grace_hours" type="number" min={0} max={12} defaultValue={company.missed_out_grace_hours ?? 2} /></Field>
-              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="wfh_capture_gps" defaultChecked={!!company.wfh_capture_gps} /> Record location at work-from-home check-in (employees are told; ATT-24)</label>
               <Field label="Keep attendance selfies for (days)" hint="Older selfies are deleted automatically (ATT-25)"><input className="input" name="selfie_retention_days" type="number" min={1} max={3650} defaultValue={company.selfie_retention_days ?? 90} /></Field>
               <label className="flex items-center gap-2 pt-6 text-sm md:col-span-2"><input type="checkbox" name="sandwich_paid" defaultChecked={company.sandwich_paid} />
                 Pay a weekly off / holiday that falls between two LOP days (sandwich rule)</label>

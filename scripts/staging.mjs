@@ -104,7 +104,7 @@ async function seed() {
     E[k] = must(await db.from("employees").insert({
       company_id: cid, user_id: U[k], first_name: first, last_name: last, email: mail(k), date_of_joining: "2026-01-01", invite_role: role,
       department_id: k === "hr" ? dept["Human Resources"] : dept.Engineering, designation_id: ["ravi", "sita"].includes(k) ? desig : null,
-      wfh_eligible: k === "ravi", mobile_attendance: false,   // Sita and the others are on-site: device punches only
+      // everyone works on site: device punches only (no work from home or mobile punch since 30 Oct, 0054)
     }).select("id").single()).id;
   }
   await db.from("employees").update({ reporting_manager_id: E.manager }).in("id", [E.ravi, E.sita]);
@@ -152,9 +152,6 @@ async function seed() {
   }
   must(await admin.rpc("recalculate_attendance", { p_company: cid, p_from: day, p_to: day }));
 
-  // today is a work-from-home day for Ravi (ATT-20)
-  const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
-  must(await db.from("wfh_days").insert({ company_id: cid, employee_id: E.ravi, date: today, status: "approved", source: "hr" }));
 
   console.log("\nStaging demo data is ready.");
   printLogins();
@@ -167,7 +164,7 @@ Sign in at http://localhost:3001 (company: Demo Industries), password Demo@12345
   Employee       admin@demo.test     (Arun: also the platform Super Admin, http://localhost:3001/admin)
   HR / Payroll   hr@demo.test
   Manager        manager@demo.test   (manages Ravi and Sita)
-  Employee       ravi@demo.test      (work from home today; September payslip)
+  Employee       ravi@demo.test      (September payslip)
   Employee       sita@demo.test      (on-site: device punches today; September payslip)
 Admin portal: http://localhost:3001/admin (Super Admin: admin@demo.test).
 `);
