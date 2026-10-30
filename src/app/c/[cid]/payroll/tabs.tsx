@@ -16,7 +16,7 @@ export function PayrollTabs({ cid, active }: { cid: string; active: string }) {
 export function ViewOnlyNote({ what = "Payroll" }: { what?: string }) {
   return (
     <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-      {what} is view-only for your role. An Administrator or Finance / Payroll makes changes.
+      {what} is view-only for your role. HR / Payroll makes changes.
     </p>
   );
 }

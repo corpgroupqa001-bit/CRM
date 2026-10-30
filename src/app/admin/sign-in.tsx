@@ -24,7 +24,7 @@ export function AdminSignIn({ expired = false }: { expired?: boolean }) {
         <SubmitButton className="btn-primary w-full" pendingText="Signing in…">Sign in to admin</SubmitButton>
       </ActionForm>
       <div className="mt-8 space-y-2 border-t border-slate-100 pt-6 text-sm text-slate-500">
-        <p>Employee or company administrator? <Link href="/" className="font-medium text-brand-600 hover:text-brand-700">Sign in to your company</Link></p>
+        <p>Owner, HR or employee? <Link href="/" className="font-medium text-brand-600 hover:text-brand-700">Sign in to your company</Link></p>
         <p>HR Manager? <Link href="/hr" className="font-medium text-brand-600 hover:text-brand-700">HR sign-in</Link></p>
       </div>
     </AuthLayout>

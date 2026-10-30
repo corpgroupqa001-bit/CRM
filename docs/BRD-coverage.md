@@ -5,11 +5,13 @@ Checked against *BRD – CRM & Workforce Management Platform* **v2.0** (26 Oct 2
 
 Database rules marked † are covered by automated tests (`pnpm test`, 233 tests on the real migrations).
 
+**Decision of 30 Oct 2026 (beyond BRD v2.0 §5.2, which lists six roles): the Company Admin role is removed (0051).** The roles are Super Admin, Owner, HR / Payroll, Manager and Employee. The Owner does everything the Company Admin did (settings, policies, devices, roles, unlocking months, support access, approving payroll); the Super Admin is the only admin and manages companies from `/admin`; a company's owner never changes. Where rows below still say Company Admin, read Owner. **Also 30 Oct (0052):** the Super Admin is an administrator in every company without a support-access grant (employees, attendance, devices, leave types, settings, roles, projects, tasks, announcements), never payroll, bank details, the audit log or leave approvals; Settings → Support access is removed.
+
 ## AUTH — sign-up / login
 | ID | Status | Where / note |
 |---|---|---|
 | AUTH-01 owner sign-up | ✅† | `/signup`: name, email, company name → (email code when verification is on) → password; the account owns the new company (`create_company_for`, 0028) |
-| AUTH-02 password rules + lockout | ✅ | 8+ chars, number, special; 5 failures in 15 min lock the login for the company's lock time (15 min default; 30 min, 1 h or 24 h in Settings → Policies, 0041), with "Try again after <time>"; administrator / HR **Unlock now** on the employee's Login & access tab (audited); the lock time has its own Sign-in security box at the top of Settings → Policies (decision of 29 Oct) |
+| AUTH-02 password rules + lockout | ✅ | 8+ chars, number, special; 5 failures in 15 min lock the login for the company's lock time (15 min default; 30 min, 1 h or 24 h in Settings → Policies, 0041), with "Try again after <time>"; Owner / HR **Unlock now** on the employee's Login & access tab (audited); the lock time has its own Sign-in security box at the top of Settings → Policies (decision of 29 Oct) |
 | AUTH-03 passwordless login | ◐ | built; needs SMTP and `EMAIL_VERIFICATION=on` |
 | AUTH-04 invitation + activation | ◐ | HR / Payroll and administrators invite (`employees.account`); employees no longer self-register (0028). Email needs SMTP |
 | AUTH-05 forgot password | ◐ | other sessions signed out; needs SMTP |
@@ -17,7 +19,7 @@ Database rules marked † are covered by automated tests (`pnpm test`, 233 tests
 | AUTH-08 Nodemailer over SMTP | ◐ | built. **OI-05 decided 27 Oct 2026: Brevo** (transactional SMTP). D-03 open: a sending domain with SPF + DKIM is still needed before live; until then a verified single sender is used for testing (`pnpm email:test`) |
 | AUTH-09 Supabase session | ✅ | |
 | AUTH-10 RBAC in RLS | ✅† | BRD §5.3 matrix in `role_permissions` + `has_perm` (0027); `tests/rbac.test.ts` checks it row by row |
-| §5.2 Custom roles | ✅ | Settings → Roles: the Company Admin copies a default role, renames it and ticks module permissions; assign under Users & roles (0037). HR / Payroll view only (Settings R). **Additions by decision (27 Oct):** default roles except Owner can be edited per company, with Reset to standard (0038); the Owner manages roles too (0039). `tests/custom-roles.test.ts` |
+| §5.2 Custom roles | ✅ | Settings → Roles: the Owner copies a default role, renames it and ticks module permissions; assign under Users & roles (0037). HR / Payroll view only (Settings R). **Additions by decision (27 Oct):** default roles except Owner can be edited per company, with Reset to standard (0038); the Owner manages roles too (0039). `tests/custom-roles.test.ts` |
 | AUTH-11 switch company | ✅ | no new sign-in; membership checked by `my_access` |
 | AUTH-12 idle timeout, log out everywhere | ✅ | |
 | AUTH-13 change email | ◐ | needs SMTP |
@@ -35,14 +37,14 @@ Database rules marked † are covered by automated tests (`pnpm test`, 233 tests
 | COM-09 archive with retention | ✅† | statutory records kept 8 years, other data purged after 90 days (0027) |
 
 ## EMP — employees
-EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles stay with Owner / Company Admin). Rejected submits keep everything typed. **Addition by decision (27 Oct):** on Add employee an Owner / Company Admin picks someone from their other companies and adds them (kept in both) or moves them (out of chosen / all companies), copying only basic details (0036). **Addition by decision (28 Oct):** the Owner, Company Admin and HR see which other companies a person works in (Employees list column and filter, employee page), only for companies they can see in full (0047).
+EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles stay with the Owner). Rejected submits keep everything typed. **Addition by decision (27 Oct):** on Add employee an Owner / Company Admin picks someone from their other companies and adds them (kept in both) or moves them (out of chosen / all companies), copying only basic details (0036). **Addition by decision (28 Oct):** the Owner, Company Admin and HR see which other companies a person works in (Employees list column and filter, employee page), only for companies they can see in full (0047).
 
 ## ATT — attendance, leave, work from home
 | ID | Status | Where / note |
 |---|---|---|
 | ATT-01 vendors | ◐ | generic push contract + CSV sync agent; vendor connectors after OI-01 |
 | ATT-02 push / pull | ◐ | push ✅†; pull via the sync agent |
-| ATT-03 … ATT-16 | ✅† | device registry + offline alert, immutable idempotent punches, exceptions queue, shifts, statuses, OT, late rule, field selfie + geofence, regularisation, live board, month lock (Company Admin unlocks), reports. **Addition by decision (27 Oct):** every employee sees "Who's in today" on the dashboard, Present / Not in yet only, never the reason (0042) |
+| ATT-03 … ATT-16 | ✅† | device registry + offline alert, immutable idempotent punches, exceptions queue, shifts, statuses, OT, late rule, field selfie + geofence, regularisation, live board, month lock (the Owner unlocks), reports. **Addition by decision (27 Oct):** every employee sees "Who's in today" on the dashboard, Present / Not in yet only, never the reason (0042) |
 | ATT-17 … ATT-19 leave | ✅† | switched on (0027) |
 | ATT-20 … ATT-35 work from home | ✅† | 0030: requests / approvals / HR ranges, eligibility, live-camera selfie check-in/out, breaks, server time, live timer (home + My attendance) and team board via Realtime, auto-close, WFH report. GPS only when enabled. **Changed by decision (27 Oct), against ATT-32:** one session per WFH day; after check-out Check in is hidden and refused, a mistaken check-out is corrected by a correction request (0043). "Start your break now?" confirmation. **Addition by decision (27 Oct):** checking out before the target shows the time left and requires a reason, which the reporting manager is notified of and sees on the live board (0044) |
 | ATT-25 selfie access + retention | ✅ | visible only to HR / Payroll and the reporting manager (employee attendance page → Selfies); deleted after the company retention (default 90 days) by `/api/cron/retention`. **Addition by decision (27 Oct):** they can flag a selfie (wrong person / place); the employee explains; HR or the manager accepts or upholds (0035) |
@@ -52,7 +54,7 @@ EMP-01 … EMP-13 ✅ (HR / Payroll has Employees CRUD and invites; system roles
 | ID | Status | Where / note |
 |---|---|---|
 | SAL-01 … SAL-03, SAL-05 … SAL-08, SAL-10, SAL-14, SAL-16 … SAL-20, SAL-22 … SAL-29 | ✅† | all four BRD scenarios tested; statutory rates are configurable placeholders to verify with the CA |
-| SAL-09 approval | ✅† | HR / Payroll prepares; Owner or Company Admin approves (not their own run); reopen with reason |
+| SAL-09 approval | ✅† | HR / Payroll prepares; the Owner approves (not their own run); reopen with reason |
 | SAL-12 payslips | ✅ | PDF on demand, optional password, email (SMTP); employees and managers: **My payslips** |
 | SAL-04 tax declarations | ◐ | recorded by HR / Payroll; no employee self-declaration yet |
 | SAL-11 full and final | ◐ | encashment and recoveries tested; gratuity not verified |

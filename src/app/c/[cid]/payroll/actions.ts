@@ -31,7 +31,7 @@ export async function runPayroll(cid: string, _: ActionState, fd: FormData): Pro
     const res = await supabase.rpc("run_payroll", { p_company: cid, p_month: `${month}-01` });
     if (res.error) {
       // a refusal (attendance not locked, payroll already locked, no permission) is only shown to the person;
-      // anything else is a failed payroll job: recorded and alerted to HR, the Company Admin and the Owner (NFR-12)
+      // anything else is a failed payroll job: recorded and alerted to HR and the Owner (NFR-12)
       if (!["P0001", "42501"].includes(res.error.code ?? "")) {
         await createAdminClient().rpc("record_failure", { p_company: cid, p_kind: "payroll",
           p_source: fmtMonth(`${month}-01`), p_detail: res.error.message });
@@ -59,8 +59,8 @@ export async function approveRun(cid: string, runId: string, _: ActionState): Pr
 export async function reopenRun(cid: string, runId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   return attempt(async () => {
     const ctx = await getCtx(cid);
-    // Owner / Administrator only (not Finance, not Super Admin); the database also checks the typed month
-    if (!["owner", "company_admin"].includes(ctx.role)) throw new Error("Only the owner or a company administrator can reopen payroll.");
+    // the Owner only (not HR, not Super Admin); the database also checks the typed month
+    if (ctx.role !== "owner") throw new Error("Only the Owner can reopen payroll.");
     const { supabase } = ctx;
     must(await supabase.rpc("reopen_payroll", { p_run: runId, p_reason: str(fd, "reason"), p_confirm: str(fd, "confirm") }));
     rv(cid);

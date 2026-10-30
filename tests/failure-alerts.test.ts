@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import { addMember, asUser, createDb, createUser } from "./db";
 
-let db: PGlite, cid: string, cidB: string, owner: string, admin: string, hr: string, emp: string;
+let db: PGlite, cid: string, cidB: string, owner: string, hr: string, emp: string;
 const sys = async <T = Record<string, unknown>>(sql: string, p: unknown[] = []) => (await db.query<T>(sql, p)).rows;
 const alerts = async (u: string, title: string) => (await sys<{ body: string; link: string }>(
   `select body, link from notifications where user_id = $1 and title = $2 order by created_at`, [u, title]));
@@ -14,21 +14,20 @@ beforeAll(async () => {
   owner = await createUser(db, "owner@corp.in");
   [{ id: cid }] = await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Acme') returning id`, [owner]);
   [{ id: cidB }] = await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Other') returning id`, [owner]);
-  admin = await addMember(db, cid, "admin@corp.in", "company_admin");
   hr = await addMember(db, cid, "hr@corp.in", "hr");
   emp = await addMember(db, cid, "emp@corp.in", "employee");
   await sys(`insert into devices (company_id, name, serial_no) values ($1, 'Gate Device 1', 'SN-001')`, [cid]);
 }, 120000);
 
 describe("failed ingestion", () => {
-  it("HR and the Company Admin are told; the Owner and employees aren't", async () => {
+  it("HR and the Owner are told (the Owner took over the Company Admin's alerts, 30 Oct); employees aren't", async () => {
     await sys(`select record_ingest_failure('SN-001', 'the device''s key, signature or IP address was rejected')`);
-    for (const u of [admin, hr]) {
+    for (const u of [owner, hr]) {
       const [a] = await alerts(u, "Punches not saved");
       expect(a.body).toMatch(/^Gate Device 1: punches from this device couldn't be saved \(the device's key, signature or IP address was rejected\)/);
       expect(a.link).toBe("/attendance/devices");
     }
-    for (const u of [owner, emp]) expect(await alerts(u, "Punches not saved")).toHaveLength(0);
+    expect(await alerts(emp, "Punches not saved")).toHaveLength(0);
   });
   it("is recorded every time but alerted at most once an hour", async () => {
     await sys(`select record_ingest_failure('SN-001', 'timeout')`);
@@ -42,9 +41,9 @@ describe("failed ingestion", () => {
 });
 
 describe("failed payroll", () => {
-  it("HR, the Company Admin and the Owner are told", async () => {
+  it("HR and the Owner are told", async () => {
     await sys(`select record_failure($1, 'payroll', 'Oct 2026', 'division by zero')`, [cid]);
-    for (const u of [owner, admin, hr]) {
+    for (const u of [owner, hr]) {
       expect((await alerts(u, "Payroll run failed"))[0].body).toBe("Payroll for Oct 2026 failed: division by zero. Nothing was saved; fix the cause and run it again.");
     }
     expect(await alerts(emp, "Payroll run failed")).toHaveLength(0);
@@ -52,7 +51,7 @@ describe("failed payroll", () => {
   it("payroll failures are visible to payroll roles; ingestion to attendance roles; never to employees", async () => {
     const seen = async (u: string) => (await asUser(db, u, async () => (await db.query<{ kind: string }>(`select kind from system_failures order by id`)).rows)).map((r) => r.kind);
     expect(await seen(hr)).toEqual(["ingestion", "ingestion", "payroll"]);
-    expect(await seen(owner)).toEqual(["payroll"]);              // Owner: Salaries R, but no attendance.manage
+    expect(await seen(owner)).toEqual(["ingestion", "ingestion", "payroll"]);   // the Owner now manages attendance too
     expect(await seen(emp)).toEqual([]);
   });
   it("only the server can record failures", async () => {
@@ -67,7 +66,7 @@ describe("failed background job", () => {
     const [f] = await sys<{ source: string; detail: string }>(`select source, detail from system_failures where kind = 'job' and company_id = $1`, [cid]);
     expect(f.source).toBe("Attendance calculation");
     expect(f.detail).toMatch(/time zone/);
-    expect((await alerts(admin, "Background job failed"))[0].body).toMatch(/^Attendance calculation failed: .*Attendance may not be up to date\.$/);
+    expect((await alerts(owner, "Background job failed"))[0].body).toMatch(/^Attendance calculation failed: .*Attendance may not be up to date\.$/);
     expect(await sys(`select * from system_failures where company_id = $1`, [cidB])).toHaveLength(0);
     await sys(`update companies set timezone = 'Asia/Kolkata' where id = $1`, [cid]);
   });

@@ -25,7 +25,7 @@ export default async function OwnerPage({ searchParams }: { searchParams: Promis
   ]);
   // the logo opens the dashboard of the company used last (else the first one), as after sign-in
   const home = (members ?? []).find((m) => m.company_id === profile?.last_company_id) ?? members?.[0];
-  const ids = (members ?? []).filter((m) => ["owner", "company_admin"].includes(m.role)).map((m) => m.company_id);
+  const ids = (members ?? []).filter((m) => m.role === "owner").map((m) => m.company_id);
 
   const [{ data: companies }, { data: emps }, { data: att }, { data: branches }, { data: runs }, { data: tasks }] = await Promise.all([
     supabase.from("companies").select("id, name, logo_url, plan, status").in("id", ids),

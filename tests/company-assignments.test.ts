@@ -25,7 +25,7 @@ beforeAll(async () => {
     C.push((await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, $2) returning id`, [U.owner, n]))[0].id);
   }
   // the person starts in Alpha only, with sensitive data and a salary there
-  await sys(`insert into company_members (company_id, user_id, role) values ($1, $2, 'employee'), ($1, $3, 'company_admin')`, [C[0], U.person, U.adminA]);
+  await sys(`insert into company_members (company_id, user_id, role) values ($1, $2, 'employee'), ($1, $3, 'hr')`, [C[0], U.person, U.adminA]);
   await sys(`insert into employees (company_id, user_id, first_name, last_name, email, phone, date_of_joining, pan_enc, pan_last4)
              values ($1, $2, 'Priya', 'Sharma', 'person@corp.in', '98480 22338', '2025-01-01', 'ENCRYPTED', '123F')`, [C[0], U.person]);
   await sys(`insert into employees (company_id, user_id, first_name, email, date_of_joining) values ($1, $2, 'Admin', 'adminA@corp.in', '2025-01-01')`, [C[0], U.adminA]);
@@ -124,7 +124,7 @@ describe("only the Super Admin, and never on themselves", () => {
   });
 
   it("the Super Admin can't change their own access, make an owner, or switch off an owner", async () => {
-    await expect(assign("sa", U.sa, C[0], "company_admin")).rejects.toThrow(/your own company access/);
+    await expect(assign("sa", U.sa, C[0], "hr")).rejects.toThrow(/your own company access/);
     await expect(assign("sa", U.other, C[0], "owner")).rejects.toThrow(/access role/);
     await expect(as("sa", `select sa_set_assignment_active($1, $2, false, null)`, [U.owner, C[0]])).rejects.toThrow(/This person is not assigned|owner/);
   });

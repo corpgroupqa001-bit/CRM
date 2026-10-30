@@ -5,7 +5,7 @@ import { addMember, asOwnerUser, asUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 let owner: string, staff: string, other: string;
-let admin: string, hr: string;
+let hr: string;
 let cid: string, empOwner: string, empStaff: string, empOther: string;
 
 const sys = async <T = Record<string, unknown>>(uid: string, sql: string, p: unknown[] = []) =>
@@ -27,7 +27,6 @@ beforeAll(async () => {
   empStaff = await mk("staff", staff, d1.id);
   empOther = await mk("other", other, d2.id);
   await sys(owner, `insert into company_members (company_id, user_id, role) values ($1, $2, 'employee'), ($1, $3, 'employee')`, [cid, staff, other]);
-  admin = await addMember(db, cid, "admin@x.in", "company_admin");   // BRD §5.3: settings, chat controls, attendance
   hr = await addMember(db, cid, "hr@x.in", "hr");                     // BRD §5.3: leave and payroll preparation
 });
 
@@ -98,11 +97,11 @@ describe("chat", () => {
     expect(await as(staff, `select * from message_stars`)).toHaveLength(0);
   });
 
-  it("COMMS-12: only the owner / admin can export a conversation, and it is logged", async () => {
+  it("COMMS-12: only the Owner can export a conversation, and it is logged", async () => {
     const [{ open_dm: conv }] = await as<{ open_dm: string }>(staff, `select open_dm($1, $2)`, [cid, other]);
     await expect(as(staff, `select * from export_conversation($1)`, [conv])).rejects.toThrow(/not allowed/);
-    await expect(as(owner, `select * from export_conversation($1)`, [conv])).rejects.toThrow(/not allowed/);   // Owner: Settings R
-    const rows = await as(admin, `select * from export_conversation($1)`, [conv]);
+    await expect(as(other, `select * from export_conversation($1)`, [conv])).rejects.toThrow(/not allowed/);
+    const rows = await as(owner, `select * from export_conversation($1)`, [conv]);   // the Owner (settings), since 30 Oct
     expect(rows.length).toBeGreaterThan(0);
     expect(await sys(owner, `select * from audit_log where action = 'export'`)).toHaveLength(1);
   });

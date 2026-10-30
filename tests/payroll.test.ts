@@ -75,7 +75,7 @@ beforeAll(async () => {
   owner = await createUser(db, "priya@acme.in");
   [{ id: company }] = await q<{ id: string }>(
     `insert into companies (owner_id, name, weekly_offs) values ($1, 'Acme', '{0}') returning id`, [owner]);
-  // SAL-09: HR / Payroll prepares the run, the Owner (or a Company Admin) approves it
+  // SAL-09: HR / Payroll prepares the run, the Owner approves it
   approver = owner;
   owner = await addMember(db, company, "hr@acme.in", "hr");
   [{ id: structure }] = await q<{ id: string }>(
@@ -212,18 +212,17 @@ describe("BRD §9 payroll scenarios", () => {
     await expect(q(`select run_payroll($1, $2)`, [company, OCT])).rejects.toThrow(/Lock attendance/);
     const run = await runPayroll();
     // HR / Payroll prepares but can't approve; the Owner approves (SAL-09)
-    await expect(q(`select approve_payroll($1)`, [run])).rejects.toThrow(/Only the Owner or a Company Admin/);
+    await expect(q(`select approve_payroll($1)`, [run])).rejects.toThrow(/Only the Owner can approve payroll/);
     await approve(run);
     await expect(q(`update payslips set net_pay = 1 where run_id = $1`, [run])).rejects.toThrow(/finalized/);
     await q(`update payslips set payment_status = 'paid' where run_id = $1`, [run]);
     await expect(q(`select run_payroll($1, $2)`, [company, OCT])).rejects.toThrow(/reopen/);
-    // only a Company Admin unlocks attendance (ATT-15), and not under an approved payroll
-    const admin = await addMember(db, company, "admin@acme.in", "company_admin");
-    await expect(asOwnerUser(db, admin, () => db.query(`select unlock_attendance_month($1, $2, 'Late correction')`, [company, OCT]))).rejects.toThrow(/reopen payroll instead/);
-    await expect(q(`select unlock_attendance_month($1, $2, 'Late correction')`, [company, OCT])).rejects.toThrow(/company administrator can unlock/);
+    // only the Owner unlocks attendance (ATT-15; the Company Admin role was removed on 30 Oct), and not under an approved payroll
+    await expect(asOwnerUser(db, approver, () => db.query(`select unlock_attendance_month($1, $2, 'Late correction')`, [company, OCT]))).rejects.toThrow(/reopen payroll instead/);
+    await expect(q(`select unlock_attendance_month($1, $2, 'Late correction')`, [company, OCT])).rejects.toThrow(/Only the Owner can unlock attendance/);
     await expect(asOwnerUser(db, approver, () => db.query(`select approve_payroll($1)`, [run]))).rejects.toThrow(/draft/);
     await expect(asOwnerUser(db, approver, () => db.query(`select reopen_payroll($1, 'Wrong OT hours', '2026-09')`, [run]))).rejects.toThrow(/Type 2026-10 to confirm/);
-    await expect(q(`select reopen_payroll($1, 'x', '2026-10')`, [run])).rejects.toThrow(/owner or a company administrator/);
+    await expect(q(`select reopen_payroll($1, 'x', '2026-10')`, [run])).rejects.toThrow(/Only the Owner can reopen payroll/);
     await asOwnerUser(db, approver, () => db.query(`select reopen_payroll($1, 'Wrong OT hours', '2026-10')`, [run]));
     const locks = await q(`select * from attendance_locks where company_id = $1`, [company]);
     expect(locks).toHaveLength(0);

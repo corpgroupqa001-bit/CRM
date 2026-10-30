@@ -29,7 +29,7 @@ export default async function NoCompany() {
       <div className="card w-full max-w-md p-8">
         {request?.status === "pending" ? (
           <Status icon={<Clock className="h-6 w-6" />} title="Waiting for approval"
-            text={<>Your request to join <b>{request.company}</b> is waiting for an administrator. You get access as soon as it&apos;s approved.</>} />
+            text={<>Your request to join <b>{request.company}</b> is waiting for the company&apos;s Owner. You get access as soon as it&apos;s approved.</>} />
         ) : (
           <>
             <Status icon={<Building2 className="h-6 w-6" />} title="Set up your company"

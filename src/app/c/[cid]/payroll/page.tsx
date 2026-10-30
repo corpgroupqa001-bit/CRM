@@ -70,7 +70,7 @@ export default async function Payroll({ params, searchParams }: { params: Promis
           </Table>
         </Card>
         {!!failures?.length && (
-          <Card title="Failed payroll runs (last 30 days)" description="Nothing was saved for these. HR, the Company Admin and the Owner were alerted." pad={false} className="lg:col-span-3">
+          <Card title="Failed payroll runs (last 30 days)" description="Nothing was saved for these. HR and the Owner were alerted." pad={false} className="lg:col-span-3">
             <Table head={["When", "Month", "Reason"]}>
               {failures.map((f, i) => <tr key={i}><td className="td whitespace-nowrap">{fmtDateTime(f.at)}</td><td className="td font-medium">{f.source}</td><td className="td text-sm text-rose-700">{f.detail}</td></tr>)}
             </Table>

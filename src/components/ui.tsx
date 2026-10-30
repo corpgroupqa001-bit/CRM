@@ -75,7 +75,7 @@ const BADGE: Record<string, readonly [string, string]> = {
   on_duty: T, wfh: T, pending: A, approved: G, rejected: R, cancelled: N, active: G, archived: N, inactive: N, exited: N,
   notice: A, draft: A, locked: G, superseded: N, reopened: R, online: G, offline: R, planned: N, on_hold: A,
   completed: G, todo: N, in_progress: S, in_review: V, done: G, blocked: R, low: N, medium: S, high: A, urgent: R,
-  paid: G, failed: R, owner: V, company_admin: S, hr: T, manager: A, employee: N,
+  paid: G, failed: R, owner: V, hr: T, manager: A, employee: N,
 };
 
 export function Badge({ value, text }: { value: string | null | undefined; text?: string }) {

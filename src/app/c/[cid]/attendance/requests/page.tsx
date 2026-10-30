@@ -36,7 +36,7 @@ export default async function Approvals({ params }: { params: Promise<{ cid: str
       <PageHeader title="Approvals" />
       <AttendanceTabs cid={cid} active="requests" perms={ctx.perms} />
       <div className="space-y-6">
-        {leaveEnabled(ctx.perms) && (leave ?? 0) > 0 && <p className="text-sm"><Link href={`/c/${cid}/leave?tab=approvals`} className="font-medium text-brand-600 hover:underline">{leave} leave request(s) waiting →</Link></p>}
+        {leaveEnabled(ctx.perms) && ctx.role !== "super_admin" && (leave ?? 0) > 0 && <p className="text-sm"><Link href={`/c/${cid}/leave?tab=approvals`} className="font-medium text-brand-600 hover:underline">{leave} leave request(s) waiting →</Link></p>}
         <Card title="Work from home requests" pad={false} description="ATT-20: approve a day in advance; the employee then checks in with a selfie that day.">
           <Table head={["Employee", "Day", "Reason", ""]} empty="No work-from-home requests waiting.">
             {others(wfh).map((d) => (

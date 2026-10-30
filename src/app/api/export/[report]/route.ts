@@ -28,7 +28,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ report: 
   if (report === "companies") {
     // COM-14 export of the owner's companies list
     const { data: m } = await supabase.from("company_members").select("role, companies(name, legal_name, gstin, pan, state, plan, status, created_at)")
-      .eq("user_id", user.id).eq("active", true).in("role", ["owner", "company_admin"]);
+      .eq("user_id", user.id).eq("active", true).eq("role", "owner");
     return xlsx((m ?? []).map((r) => ({ ...(r.companies as unknown as Row), my_role: r.role })), "companies");
   }
 

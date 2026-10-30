@@ -2,7 +2,7 @@
 // Run just this file:  pnpm test tests/daily-attendance.test.ts
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { addMember, asOwnerUser, asUser, createDb, createUser } from "./db";
+import { asOwnerUser, asUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 let owner: string, cid: string, device: string;
@@ -24,7 +24,6 @@ beforeAll(async () => {
   owner = await createUser(db, "owner@acme.in");
   cid = (await asOwnerUser(db, owner, () => db.query<{ id: string }>(
     `insert into companies (owner_id, name, weekly_offs) values ($1, 'Acme', '{0}') returning id`, [owner]))).rows[0].id;
-  owner = await addMember(db, cid, "admin@acme.in", "company_admin");   // devices and attendance: Company Admin
   // the standard shift from the BRD example: 09:00–18:00, 0 minutes grace
   await db.query(`update shifts set start_time = '09:00', end_time = '18:00', grace_min = 0 where company_id = $1`, [cid]);
   device = (await asOwnerUser(db, owner, () => db.query<{ r: { device_id: string } }>(

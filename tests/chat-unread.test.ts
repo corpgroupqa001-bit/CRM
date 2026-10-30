@@ -16,7 +16,7 @@ beforeAll(async () => {
   [{ id: cid }] = await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Acme') returning id`, [owner]);
   [{ id: cidB }] = await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Other') returning id`, [owner]);
   hr = await addMember(db, cid, "hr@corp.in", "hr");
-  admin = await addMember(db, cid, "admin@corp.in", "company_admin");
+  admin = await addMember(db, cid, "admin@corp.in", "manager");
   [{ open_dm: dm }] = await asUser(db, hr, async () => (await db.query<{ open_dm: string }>(`select open_dm($1, $2)`, [cid, owner])).rows);
   [{ create_group: group }] = await asUser(db, admin, async () => (await db.query<{ create_group: string }>(`select create_group($1, 'Leads', $2)`, [cid, [owner, hr]])).rows);
 }, 120000);

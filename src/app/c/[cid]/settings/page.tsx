@@ -5,7 +5,7 @@ import { Badge, Card, Field, PageHeader, Table, Tabs } from "@/components/ui";
 import { fmtDate, fmtDateTime, label } from "@/lib/format";
 import { ASSIGNABLE_ROLES, PERMISSION_GROUPS, ROLE_LABEL, type Role } from "@/lib/rbac";
 import { LOCKOUT_CHOICES, lockoutLabel } from "@/lib/auth/lockout";
-import { addHoliday, addSchedule, deleteRow, grantSupportAccess, revokeSupportAccess, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, saveSignInSecurity, setMemberRole, cloneRole, saveRole, deleteRole, saveDefaultRole, resetDefaultRole } from "./actions";
+import { addHoliday, addSchedule, deleteRow, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, saveSignInSecurity, setMemberRole, cloneRole, saveRole, deleteRole, saveDefaultRole, resetDefaultRole } from "./actions";
 
 export const metadata = { title: "Settings" };
 
@@ -20,8 +20,8 @@ export default async function Settings({ params, searchParams }: { params: Promi
   const admin = perms.has("settings.manage");
   const orgEdit = perms.has("settings.org");
   const base = `/c/${cid}/settings`;
-  // BRD §5.3 "Settings and audit log": Company Admin CRUD; Owner and HR / Payroll read. The Owner also edits
-  // the company profile (Companies CRUD).
+  // BRD §5.3 "Settings and audit log": Owner CRUD (since the Company Admin was removed, 30 Oct); HR / Payroll
+  // read. The Owner also edits the company profile (Companies CRUD).
   const allTabs = [
     { key: "company", label: "Company", href: `${base}?tab=company`, perm: "settings.read" },
     { key: "branches", label: "Branches", href: `${base}?tab=branches`, perm: "settings.read" },
@@ -33,7 +33,6 @@ export default async function Settings({ params, searchParams }: { params: Promi
     { key: "chat", label: "Chat", href: `${base}?tab=chat`, perm: "settings.manage" },
     { key: "reports", label: "Scheduled reports", href: `${base}?tab=reports`, perm: "settings.manage" },
     { key: "privacy", label: "Privacy requests", href: `${base}?tab=privacy`, perm: "settings.manage" },
-    { key: "support", label: "Support access", href: `${base}?tab=support`, perm: "settings.manage" },
     { key: "audit", label: "Audit log", href: `${base}?tab=audit`, perm: "audit.read" },
   ] as const;
   const tabs = allTabs.filter((t) => perms.has(t.perm));
@@ -277,18 +276,18 @@ export default async function Settings({ params, searchParams }: { params: Promi
         </ActionForm>
       </Card>
     );
-    // designation → access role (Administrators): what a candidate with this designation gets on approval
+    // designation → access role (the Owner): what a candidate with this designation gets on approval
     const canMap = perms.has("employees.assign_role");
     const access = canMap && (
       <Card title="Access by designation" className="md:col-span-2"
-        description="When a new candidate signs up with a designation, the administrator approving them starts from this role (and can change it). A designation never grants access without that approval.">
+        description="When a new candidate signs up with a designation, the Owner approving them starts from this role (and can change it). A designation never grants access without that approval.">
         <Table head={["Designation", "Department", "Access role on approval"]} empty="Add designations above first.">
           {desigs.filter((d) => d.active).map((d) => (
             <tr key={d.id}><td className="td font-medium">{d.name}</td>
               <td className="td text-slate-500">{deps.find((x) => x.id === d.department_id)?.name ?? "—"}</td>
               <td className="td"><ActionForm action={setDesignationAccess.bind(null, cid, d.id)} className="flex flex-wrap items-center gap-2 [&>p]:basis-full">
                 <select name="access_role" defaultValue={d.access_role ?? ""} className="input h-8 w-48 text-sm">
-                  <option value="">Not set (administrator chooses)</option>
+                  <option value="">Not set (the Owner chooses)</option>
                   {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                 </select>
                 <SubmitButton className="btn-secondary btn-sm">Save</SubmitButton>
@@ -333,7 +332,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
     body = (
       <div className="space-y-6">
       {/* AUTH-02, on its own at the top so it is easy to find (decision of 29 Oct) */}
-      <Card title="Sign-in security" description="Five wrong passwords within 15 minutes lock the login. Owner, Company Admin and HR can unlock it sooner from Employees → name → Login & access → Unlock now.">
+      <Card title="Sign-in security" description="Five wrong passwords within 15 minutes lock the login. The Owner and HR can unlock it sooner from Employees → name → Login & access → Unlock now.">
         <ActionForm action={saveSignInSecurity.bind(null, cid)} className="flex flex-wrap items-end gap-3">
           <Field label="Lock the login for" hint="Someone in several companies gets the longest lock time." className="min-w-0 flex-[0_1_280px]">
             <select className="input" name="lockout_minutes" defaultValue={company.lockout_minutes} disabled={!admin}>
@@ -423,7 +422,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
   }
 
   if (tab === "roles") {
-    // BRD §5.2: the Company Admin copies and edits roles, and so does the Owner (decision of 27 Oct, 0039);
+    // BRD §5.2: the Owner copies and edits roles (decisions of 27 Oct, 0039, and 30 Oct, 0051);
     // HR / Payroll (Settings R) view them.
     // Editing a default role changes it for this company only (0038); the Owner role is view only.
     const canEdit = perms.has("roles.manage");
@@ -467,7 +466,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             </ActionForm>
           </Card>
         ) : (
-          <p className="text-sm text-slate-500">View only. The Owner or a Company Admin creates and changes roles.</p>
+          <p className="text-sm text-slate-500">View only. The Owner creates and changes roles.</p>
         )}
         <Card title="Roles" pad={false}>
           <Table head={["Role", "Type", "Copied from", "Permissions", "People", ""]}>
@@ -550,43 +549,13 @@ export default async function Settings({ params, searchParams }: { params: Promi
                   .map((k) => `${k}: ${JSON.stringify(l.old_data[k])} → ${JSON.stringify(l.new_data[k])}`).join("; ")
               : l.action === "unlock" || l.action === "reopen" ? `reason: ${l.new_data?.reason}` : "";
             return (
-              <tr key={l.id}><td className="td whitespace-nowrap">{fmtDateTime(l.at)}</td><td className="td">{l.user_id ? who.get(l.user_id) ?? "user" : "system"}</td>
+              <tr key={l.id}><td className="td whitespace-nowrap">{fmtDateTime(l.at)}</td><td className="td">{l.user_id ? who.get(l.user_id) ?? "user" : "system"}{l.via_super_admin && <> <Badge value="super_admin" text="Super Admin" /></>}</td>
                 <td className="td">{l.table_name}</td><td className="td">{l.action}</td>
                 <td className="td max-w-md truncate text-xs text-slate-500" title={changed}>{changed}</td><td className="td text-xs">{l.ip}</td></tr>
             );
           })}
         </Table>
       </Card>
-    );
-  }
-
-  if (tab === "support") {
-    const { data: grants } = await supabase.from("support_access").select("*").eq("company_id", cid).order("created_at", { ascending: false }).limit(20);
-    const now = Date.now();
-    body = (
-      <div className="space-y-6">
-        <Card title="Platform support access" description="The platform Super Admin can't see this company's employees, attendance or payroll unless you allow it here, for a limited time. Every grant and every change they make is in the audit log.">
-          <ActionForm action={grantSupportAccess.bind(null, cid)} className="grid gap-4 md:grid-cols-4" resetOnSuccess>
-            <Field label="For" className="md:col-span-1"><select className="input" name="hours" defaultValue="4">
-              {[1, 4, 8, 24, 48, 72].map((h) => <option key={h} value={h}>{h} hour{h > 1 ? "s" : ""}</option>)}</select></Field>
-            <Field label="Support case or reason" className="md:col-span-3"><input className="input" name="reason" required placeholder="e.g. Ticket 1042: payslip PDF not opening" /></Field>
-            <div className="md:col-span-4"><SubmitButton>Allow support access</SubmitButton></div>
-          </ActionForm>
-        </Card>
-        <Card title="Recent grants" pad={false}>
-          <Table head={["Granted", "Reason", "Until", "Status", ""]} empty="Support has never been given access.">
-            {(grants ?? []).map((g) => {
-              const live = !g.revoked_at && new Date(g.expires_at).getTime() > now;
-              return (
-                <tr key={g.id}><td className="td whitespace-nowrap">{fmtDateTime(g.created_at)}</td><td className="td">{g.reason}</td>
-                  <td className="td whitespace-nowrap">{fmtDateTime(g.expires_at)}</td>
-                  <td className="td"><Badge value={live ? "active" : "inactive"} text={live ? "Active" : g.revoked_at ? "Revoked" : "Expired"} /></td>
-                  <td className="td text-right">{live && <form action={revokeSupportAccess.bind(null, cid, g.id)}><button className="btn-secondary btn-sm">Revoke now</button></form>}</td></tr>
-              );
-            })}
-          </Table>
-        </Card>
-      </div>
     );
   }
 
@@ -598,7 +567,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
       <Tabs tabs={tabs} active={tab} />
       {readOnly ? (
         <>
-          <p className="mb-4 text-sm text-slate-500">View only. A Company Admin changes these.</p>
+          <p className="mb-4 text-sm text-slate-500">View only. The Owner changes these.</p>
           <fieldset disabled className="contents [&_button]:hidden">{body}</fieldset>
         </>
       ) : body}

@@ -38,7 +38,7 @@ export function PersonalFields({ e = {}, selfOnly = false }: { e?: Emp; selfOnly
   );
 }
 
-/** canSetRole: only administrators choose the system role (the database enforces it too) */
+/** canSetRole: only the Owner chooses the system role (the database enforces it too) */
 export function JobFields({ e = {}, o, canSetRole = false }: { e?: Emp; o: JobOptions; canSetRole?: boolean }) {
   const v = (k: string) => (e[k] as string) ?? "";
   return (
@@ -58,7 +58,7 @@ export function JobFields({ e = {}, o, canSetRole = false }: { e?: Emp; o: JobOp
           <select className="input" name="invite_role" defaultValue={v("invite_role") || "employee"}>
             {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
       ) : (
-        <Field label="System role" hint="Set by an administrator"><input className="input" value={ROLE_LABEL[(v("invite_role") || "employee") as Role]} disabled /></Field>
+        <Field label="System role" hint="Set by the Owner"><input className="input" value={ROLE_LABEL[(v("invite_role") || "employee") as Role]} disabled /></Field>
       )}
       <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" name="mobile_attendance" defaultChecked={!!e.mobile_attendance} /> Allow mobile attendance (selfie + GPS)</label>
       <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" name="wfh_eligible" defaultChecked={!!e.wfh_eligible} /> Can work from home (selfie check-in, ATT-21)</label>

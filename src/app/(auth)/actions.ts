@@ -122,8 +122,8 @@ async function approvalGate(userId: string): Promise<string | null> {
   ]);
   if (count || sa) return null;
   const req = await latestJoinRequest(userId);
-  if (req?.status === "pending") return `Your request to join ${req.company} is waiting for an administrator to approve it. You can sign in once it's approved.`;
-  if (req?.status === "rejected") return `Your request to join ${req.company} was not approved${req.decision_note ? `: ${req.decision_note}` : ""}. Contact the company administrator.`;
+  if (req?.status === "pending") return `Your request to join ${req.company} is waiting for the company's Owner to approve it. You can sign in once it's approved.`;
+  if (req?.status === "rejected") return `Your request to join ${req.company} was not approved${req.decision_note ? `: ${req.decision_note}` : ""}. Contact the company's Owner.`;
   return null;
 }
 

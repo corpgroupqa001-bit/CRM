@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { assertPerm, getCtx } from "@/lib/context";
 import { attempt, must, str, type ActionState } from "@/lib/actions";
 
-// Projects (BRD §5.3): Owner and Company Admin create and manage all projects; a Manager updates the
+// Projects (BRD §5.3): the Owner creates and manages all projects; a Manager updates the
 // projects they manage; members read. RLS (can_manage_project) decides per project; these checks fail early.
 async function managerCtx(cid: string) {
   const ctx = await getCtx(cid);
@@ -23,7 +23,7 @@ export async function saveProject(cid: string, _: ActionState, fd: FormData): Pr
       start_date: str(fd, "start_date"), end_date: str(fd, "end_date"), manager_id: str(fd, "manager_id"), status: str(fd, "status") ?? "planned",
     };
     if (!row.name) throw new Error("Project name is required.");
-    if (!id && !ctx.perms.has("projects.manage_all")) throw new Error("Only the Owner or a Company Admin can create projects.");
+    if (!id && !ctx.perms.has("projects.manage_all")) throw new Error("Only the Owner can create projects.");
     // a Manager's projects stay led by them
     if (!ctx.perms.has("projects.manage_all")) {
       if (!ctx.employee) throw new Error("You need an employee record to lead a project.");

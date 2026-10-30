@@ -12,7 +12,7 @@ export function companyAccessError(access: Access): string | null {
   switch (access?.reason) {
     case "membership_inactive":
     case "employee_inactive":
-      return "Your account is inactive in this company. Contact your company administrator.";
+      return "Your account is inactive in this company. Contact your company's Owner or HR.";
     default:
       return "This account doesn't have access to the selected company. Check the company and try again.";
   }

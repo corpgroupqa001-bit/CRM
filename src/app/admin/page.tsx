@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { currentUser, needsSecondFactor } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ActionForm, SubmitButton } from "@/components/action-form";
-import { Badge, Card, PageHeader, Stat, Table } from "@/components/ui";
+import { Card, PageHeader, Stat, Table } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { attempt, must, numOrNull, str, type ActionState } from "@/lib/actions";
 import { SessionGuard } from "@/components/session-guard";
@@ -16,12 +16,14 @@ import { ADMIN_IDLE_SECONDS } from "@/lib/auth/admin-idle";
 
 export const metadata = { title: "Platform admin" };
 
-// BRD §4 Super Admin (platform operator): every tenant, its plan, and its administrators.
+// BRD §4 Super Admin (platform operator): every tenant, its owner and its plan. The Super Admin is the only
+// admin: there is no administrator role inside a company, and a company's owner never changes (decision of 30 Oct).
 // Access is a row in platform_admins (granted by the operator in SQL, never automatically) and
 // every action is checked on the server (is_super_admin() with the signed-in user's session) before it
-// runs. Creating a company and changing its owner use the server-only service client after that check
-// (the key never reaches the browser) and are written to the audit log. "Open" enters a company only while
-// its Company Admin has granted time-limited support access (BRD OI-13); every visit and write is audited.
+// runs. Creating a company uses the server-only service client after that check
+// (the key never reaches the browser) and is written to the audit log. "Open" enters a company in
+// the company app, where the Super Admin acts as an administrator in every company (decision of 30 Oct,
+// 0052; not payroll or leave approvals); every visit and write is audited.
 //
 // The portal has its own session (lib/supabase/scopes.ts: cookie on path /admin), separate from the
 // company session, so a Super Admin and an employee can be signed in at once in one browser.
@@ -87,26 +89,6 @@ async function createCompany(_: ActionState, fd: FormData): Promise<ActionState>
   });
 }
 
-// hand a company to another existing account; the previous owner stays on as an Administrator
-async function changeOwner(_: ActionState, fd: FormData): Promise<ActionState> {
-  "use server";
-  return attempt(async () => {
-    const { user } = await requireSuperAdmin();
-    const cid = str(fd, "company")!;
-    const owner = await accountByEmail(str(fd, "owner_email"));
-    const admin = createAdminClient();
-    const company = must(await admin.from("companies").select("id, name, owner_id").eq("id", cid).single());
-    if (company.owner_id === owner.id) throw new Error(`${owner.email} already owns ${company.name}.`);
-    must(await admin.from("companies").update({ owner_id: owner.id }).eq("id", cid));
-    must(await admin.from("company_members").upsert({ company_id: cid, user_id: owner.id, role: "owner", active: true }, { onConflict: "company_id,user_id" }));
-    must(await admin.from("company_members").update({ role: "company_admin" }).eq("company_id", cid).eq("user_id", company.owner_id));
-    await ensureOwnerEmployee(cid, owner);
-    await audit(cid, user.id, "super_admin_change_owner", { from: company.owner_id, to: owner.email });
-    revalidatePath("/admin");
-    return `${owner.email} now owns ${company.name}; the previous owner is an Administrator.`;
-  });
-}
-
 async function savePlan(_: ActionState, fd: FormData): Promise<ActionState> {
   "use server";
   return attempt(async () => {
@@ -118,35 +100,6 @@ async function savePlan(_: ActionState, fd: FormData): Promise<ActionState> {
     revalidatePath("/admin");
     return "Saved.";
   });
-}
-
-async function addAdmin(_: ActionState, fd: FormData): Promise<ActionState> {
-  "use server";
-  return attempt(async () => {
-    const { supabase, user } = await requireSuperAdmin();
-    const company = str(fd, "company"), email = str(fd, "email")?.trim().toLowerCase();
-    if (!email) throw new Error("Enter the email of an existing account.");
-    // say plainly when the person already runs this company (the database refuses these too)
-    const { data } = await supabase.rpc("sa_companies");
-    const current = ((data ?? []) as Row[]).find((c) => c.id === company)?.admins.find((a) => a.active && a.email.toLowerCase() === email);
-    if (current?.role === "owner") throw new Error(`${email} is already this company's owner, which includes full administrator access.`);
-    if (current) throw new Error(`${email} is already an administrator of this company.`);
-    // the operator may add their own account too (the group owner runs every company), so this goes
-    // through the server-side client after the Super Admin check rather than sa_set_company_admin
-    const person = await accountByEmail(email);
-    must(await createAdminClient().from("company_members")
-      .upsert({ company_id: company, user_id: person.id, role: "company_admin", active: true }, { onConflict: "company_id,user_id" }));
-    await audit(company!, user.id, "super_admin_grant_admin", { email: person.email });
-    revalidatePath("/admin");
-    return `${person.email} is now an administrator. Reload to see the company in their switcher.`;
-  });
-}
-
-async function removeAdmin(company: string, user: string) {
-  "use server";
-  const { supabase } = await requireSuperAdmin();
-  await supabase.rpc("sa_remove_company_admin", { p_company: company, p_user: user });
-  revalidatePath("/admin");
 }
 
 type Row = { id: string; name: string; status: string; plan: string; employee_limit: number | null; renewal_date: string | null;
@@ -179,7 +132,7 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
           <span className="ml-2 hidden text-xs text-slate-500 sm:inline">Signs out after 15 minutes idle or when the browser closes</span></span>
         <span className="flex items-center gap-1"><ThemeToggle /><form action={adminSignOut}><button className="btn-secondary btn-sm">Sign out of admin</button></form></span>
       </div>
-      <div className="mt-4"><PageHeader title="Platform admin" subtitle="All tenants on corpgroup.com: plans, seats and company administrators" /></div>
+      <div className="mt-4"><PageHeader title="Platform admin" subtitle="All tenants on corpgroup.com: owners, plans and seats" /></div>
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Companies" value={companies.length} />
         <Stat label="Active" value={companies.filter((c) => c.status === "active").length} tone="green" />
@@ -194,35 +147,15 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
         </ActionForm>
       </Card>
       <Card pad={false} title="Tenants">
-        <Table head={["Company", "Owner", "Employees", "Administrators", "Plan · seats · renewal · status"]}>
+        <Table head={["Company", "Owner", "Employees", "Plan · seats · renewal · status"]}>
           {companies.map((c) => {
             const over = c.employee_limit && Number(c.active_employees) > c.employee_limit;
             return (
               <tr key={c.id} className="align-top">
                 <td className="td font-medium text-slate-900">{c.name}<div className="text-xs font-normal text-slate-500">since {fmtDate(c.created_at)}</div>
-                  <a href={`/c/${c.id}/dashboard`} className="text-xs font-medium text-brand-600 hover:underline" title="Works only while this company's admin has granted support access">Open →</a></td>
-                <td className="td text-xs">{c.owner_email ?? "—"}
-                  <ActionForm action={changeOwner} className="mt-2 flex flex-wrap gap-1 [&>p]:basis-full" confirm={`Change the owner of ${c.name}? The current owner becomes an Administrator.`}>
-                    <input type="hidden" name="company" value={c.id} />
-                    <input name="owner_email" type="email" placeholder="new owner email" className="input h-8 w-40 text-xs" required />
-                    <SubmitButton className="btn-secondary btn-sm">Change owner</SubmitButton>
-                  </ActionForm></td>
+                  <a href={`/c/${c.id}/dashboard`} className="text-xs font-medium text-brand-600 hover:underline" title="Opens the company as its administrator (not payroll, bank details or leave approvals)">Open →</a></td>
+                <td className="td text-xs">{c.owner_email ?? "—"}</td>
                 <td className={`td tabular-nums ${over ? "font-semibold text-rose-600" : ""}`}>{c.active_employees}{c.employee_limit ? ` / ${c.employee_limit}` : ""}</td>
-                <td className="td">
-                  <ul className="space-y-1 text-xs">
-                    {c.admins.filter((a) => a.active).map((a) => (
-                      <li key={a.user_id} className="flex items-center gap-2">
-                        <span className="truncate">{a.email}</span><Badge value={a.role} text={a.role === "owner" ? "Owner" : "Admin"} />
-                        {a.role !== "owner" && <form action={removeAdmin.bind(null, c.id, a.user_id)}><button className="text-slate-500 hover:text-rose-600" aria-label={`Remove ${a.email}`}>✕</button></form>}
-                      </li>
-                    ))}
-                  </ul>
-                  <ActionForm action={addAdmin} className="mt-2 flex flex-wrap gap-1 [&>p]:basis-full" resetOnSuccess>
-                    <input type="hidden" name="company" value={c.id} />
-                    <input name="email" type="email" placeholder="admin@company.com" className="input h-8 w-44 text-xs" required />
-                    <SubmitButton className="btn-secondary btn-sm">Add admin</SubmitButton>
-                  </ActionForm>
-                </td>
                 <td className="td">
                   <ActionForm action={savePlan} className="flex flex-wrap items-center gap-2 [&>p]:basis-full">
                     <input type="hidden" name="id" value={c.id} />
@@ -239,9 +172,9 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
         </Table>
       </Card>
       <p className="mt-4 text-xs text-slate-500">
-        Adding an administrator gives an existing account the Administrator role in that company; it does not create an employee record.
+        A company&apos;s owner is set when it is created and never changes; there are no company administrators.
         Super admins are granted only by the platform operator (see README → Super Admin). Opening a company is recorded in its audit log.
-        &ldquo;Open&rdquo; goes to the company app, which has its own sign-in: the admin portal&apos;s session is separate. You see a company&apos;s employees, attendance and payroll only while its Company Admin has granted support access (Settings → Support access), for up to 72 hours.
+        &ldquo;Open&rdquo; goes to the company app, which has its own sign-in: the admin portal&apos;s session is separate. There you act as an administrator: employees, attendance, devices, leave types, settings, roles, projects, tasks and announcements; never payroll, bank details, the audit log or leave approvals. Everything you change is in that company&apos;s audit log.
       </p>
     </main>
   );

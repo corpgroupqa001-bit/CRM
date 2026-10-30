@@ -23,12 +23,12 @@ export default async function Run({ params }: { params: Promise<{ cid: string; r
   const [{ data: rawSlips }, dir] = await Promise.all([supabase.from("payslips").select("*").eq("run_id", runId), directory(supabase, cid)]);
   const slips = (rawSlips ?? []).map((p) => ({ ...p, employees: dir.get(p.employee_id) ?? { first_name: "—", last_name: null, emp_code: "" } }));
   const rows = (slips ?? []).sort((a, b) => (a.employees as Emp).emp_code.localeCompare((b.employees as Emp).emp_code));
-  // Administrator or Finance approve, but never the person who ran this version (maker-checker);
-  // reopening a finalized run is for the owner / company administrator only
+  // the Owner approves, but never the person who ran this version (maker-checker);
+  // reopening a finalized run is for the Owner only
   const canApprove = perms.has("salaries.approve");
   const canManage = perms.has("salaries.manage");     // HR: view only (approved BRD matrix)
   const ranIt = run.ran_by === user.id;
-  const canReopen = role === "owner" || role === "company_admin";
+  const canReopen = role === "owner";
   const dl = (report: string) => `/api/export/${report}?company=${cid}&run=${runId}`;
   const errors = (run.warnings as { level: string; message: string }[]).filter((w) => w.level === "error");
 
@@ -67,8 +67,8 @@ export default async function Run({ params }: { params: Promise<{ cid: string; r
               {errors.length > 0 && <p className="text-xs text-rose-600">Fix the errors and run again before approving.</p>}
             </ActionForm>
           ) : <p className="text-sm text-slate-600">{canApprove && ranIt
-                ? "You ran this payroll, so another Administrator or Finance user must approve it."
-                : "Waiting for an Administrator or Finance / Payroll to approve."}</p>)
+                ? "You ran this payroll, so someone else must approve it."
+                : "Waiting for the Owner to approve."}</p>)
             : run.status === "locked" ? <p className="text-sm text-emerald-700">Approved {fmtDateTime(run.approved_at)}. Finalized and read-only.</p>
             : <p className="text-sm text-slate-500">{run.status === "reopened" ? `Reopened: ${run.reopen_reason}` : "Superseded by a newer run."}</p>}
         </Card>

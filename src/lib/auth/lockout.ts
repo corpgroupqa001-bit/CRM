@@ -1,6 +1,6 @@
 // AUTH-02 lockout: five failed sign-ins within 15 minutes lock the login for the company's lock time
-// (15 minutes by default, configurable) or until an administrator unlocks it. A successful sign-in or an
-// administrator's unlock (both stored as a successful attempt) starts the count again.
+// (15 minutes by default, configurable) or until the Owner or HR unlocks it. A successful sign-in or an
+// unlock (both stored as a successful attempt) starts the count again.
 
 export const LOCK_FAILURES = 5;
 export const LOCK_WINDOW_MIN = 15;

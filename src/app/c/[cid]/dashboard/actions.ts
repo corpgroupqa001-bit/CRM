@@ -17,7 +17,7 @@ function payrollMonth() {
 // SAL-27 from the dashboard: calculate_payroll_run(company, 'YYYY-MM') stores a new draft run
 export async function runPayrollNow(cid: string): Promise<PayrollResult> {
   const ctx = await getCtx(cid);
-  if (!can(ctx, "salaries.manage")) return { ok: false, month: payrollMonth(), message: "Only Finance / Payroll or an administrator can run payroll." };
+  if (!can(ctx, "salaries.manage")) return { ok: false, month: payrollMonth(), message: "Only HR / Payroll can run payroll." };
   const { supabase } = ctx;
   const month = payrollMonth();
   const label = fmtMonth(`${month}-01`);

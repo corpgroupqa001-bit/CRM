@@ -274,7 +274,7 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
           </section>
         )}
         {whoIsIn}
-        {!employee && !team && <Empty title={`Welcome to ${company.name}`} icon={Users}>Your account isn&apos;t linked to an employee record yet. Ask your HR Manager or administrator to link it; your attendance, tasks and payslips will then appear here.</Empty>}
+        {!employee && !team && <Empty title={`Welcome to ${company.name}`} icon={Users}>Your account isn&apos;t linked to an employee record yet. Ask your HR Manager or Owner to link it; your attendance, tasks and payslips will then appear here.</Empty>}
         {team}
       </div>
     </>

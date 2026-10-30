@@ -73,7 +73,7 @@ export async function updateEmployee(cid: string, eid: string, section: "persona
     if (section === "job") {
       assertPerm(ctx, "employees.update");
       patch = { ...pick(fd, JOB_FIELDS), emp_code: str(fd, "emp_code"), mobile_attendance: bool(fd, "mobile_attendance"), wfh_eligible: bool(fd, "wfh_eligible") };
-      // the system role changes only when an administrator submits it
+      // the system role changes only when the Owner submits it
       if (can(ctx, "employees.assign_role") && fd.has("invite_role")) patch.invite_role = str(fd, "invite_role") ?? "employee";
     } else if (can(ctx, "employees.update")) {
       patch = pick(fd, PERSONAL_FIELDS);
@@ -92,6 +92,7 @@ export async function saveStatutory(cid: string, eid: string, _: ActionState, fd
   return attempt(async () => {
     const ctx = await getCtx(cid);
     const { supabase, employee } = ctx;
+    if (ctx.role === "super_admin") throw new Error("Bank, PAN and statutory details are not available to the Super Admin.");
     if (can(ctx, "employees.update")) {
       must(await supabase.from("employees").update(sensitive(fd)).eq("id", eid).eq("company_id", cid));
       revalidatePath(`/c/${cid}/employees/${eid}`);
@@ -195,7 +196,7 @@ export async function toggleChecklist(cid: string, eid: string, itemId: string, 
 // AUTH-04 invite: email a link to the activation page
 async function sendInvite(cid: string, eid: string) {
   const ctx = await getCtx(cid);
-  assertPerm(ctx, "employees.account");   // invitations: HR / Payroll and administrators (AUTH-04)
+  assertPerm(ctx, "employees.account");   // invitations: HR / Payroll and the Owner (AUTH-04)
   const { supabase, company } = ctx;
   const e = must(await supabase.from("employees").select("first_name, email, user_id").eq("id", eid).single());
   if (e.user_id) throw new Error("This employee has already activated their account.");
@@ -346,7 +347,7 @@ export async function importEmployees(cid: string, _: ActionState, fd: FormData)
     revalidatePath(`/c/${cid}/employees`);
     const salariesSkipped = !can(ctx, "salaries.manage") && valid.some((v) => v.ctc > 0);
     return { ok: `Imported ${inserted.length} employee(s).${errors.length ? ` Skipped ${errors.length} row(s) with errors.` : ""}`
-      + (salariesSkipped ? " Salaries in the file were not saved: an administrator or Finance / Payroll sets them." : ""), data: { errors } };
+      + (salariesSkipped ? " Salaries in the file were not saved: HR / Payroll sets them." : ""), data: { errors } };
   });
 }
 
@@ -366,7 +367,6 @@ export async function setEmployeePassword(cid: string, eid: string, _: ActionSta
     if (e.user_id) {
       const { data: m } = await admin.from("company_members").select("role").eq("company_id", cid).eq("user_id", e.user_id).maybeSingle();
       if (m?.role === "owner" && e.user_id !== user.id) throw new Error("Only the owner can change the owner's password.");
-      if (m && ["owner", "company_admin"].includes(m.role) && !can(ctx, "employees.assign_role")) throw new Error("Only an admin can change an admin's password.");
       const { error } = await admin.auth.admin.updateUserById(e.user_id, { password });
       if (error) throw error;
       return "Password updated. Share it with the employee securely and ask them to change it after signing in.";
@@ -406,7 +406,7 @@ export async function rejectJoin(cid: string, id: string, _: ActionState, fd: Fo
   });
 }
 
-// Removing an employee (Administrator): a record created by mistake (no login, no history) is deleted.
+// Removing an employee (Owner, HR): a record created by mistake (no login, no history) is deleted.
 // Anyone else is exited today, signed out of this company for good, and hidden from every list;
 // their attendance and payroll history stays for the retention period. Written to the audit log.
 export async function removeEmployee(cid: string, eid: string, _: ActionState, fd: FormData): Promise<ActionState> {
@@ -476,7 +476,7 @@ export async function transferCompany(cid: string, eid: string, _: ActionState, 
     const effective = str(fd, "effective_date") ?? new Date().toISOString().slice(0, 10);
     const { data: there } = await supabase.rpc("my_access", { cid: target });
     const targetPerms = ((there as { allowed: boolean; permissions?: string[] } | null)?.allowed ? (there as { permissions: string[] }).permissions : []);
-    if (!targetPerms.includes("employees.create")) throw new Error("You need administrator rights in both companies.");
+    if (!targetPerms.includes("employees.create")) throw new Error("You need to be the Owner of both companies.");
     const e = must(await supabase.from("employees").select("*").eq("id", eid).single());
     const admin = createAdminClient();
     const { data: dup } = await admin.from("employees").select("id").eq("company_id", target).ilike("email", e.email).maybeSingle();
@@ -497,7 +497,7 @@ export async function transferCompany(cid: string, eid: string, _: ActionState, 
   });
 }
 
-// AUTH-02: an administrator (or HR, who manages logins) lifts a lockout before the 15 minutes are up.
+// AUTH-02: the Owner (or HR, who manages logins) lifts a lockout before the 15 minutes are up.
 // The lockout counts failures since the last success, so a recorded unlock resets it; the audit log says who.
 export async function unlockLogin(cid: string, eid: string, _: ActionState, __: FormData): Promise<ActionState> {
   return attempt(async () => {
@@ -505,7 +505,7 @@ export async function unlockLogin(cid: string, eid: string, _: ActionState, __: 
     assertPerm(ctx, "employees.account");
     const e = must(await ctx.supabase.from("employees").select("email, user_id").eq("id", eid).eq("company_id", cid).single());
     const admin = createAdminClient();
-    await admin.from("login_attempts").insert({ email: String(e.email).toLowerCase(), success: true, ip: "unlocked by administrator" });
+    await admin.from("login_attempts").insert({ email: String(e.email).toLowerCase(), success: true, ip: "unlocked by Owner or HR" });
     await admin.from("audit_log").insert({ company_id: cid, user_id: ctx.user.id, table_name: "login_attempts", record_id: eid, action: "unlock_login" });
     revalidatePath(`/c/${cid}/employees/${eid}`);
     return "Login unlocked. They can sign in again.";
@@ -513,7 +513,7 @@ export async function unlockLogin(cid: string, eid: string, _: ActionState, __: 
 }
 
 // An existing employee of one of my other companies joins this one: added (they stay where they are) or
-// moved (they leave the companies chosen). Owner / Company Admin of every company involved (0036).
+// moved (they leave the companies chosen). the Owner of every company involved (0036).
 export async function addExistingPerson(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
   let id = "";
   const r = await attempt(async () => {

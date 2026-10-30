@@ -57,7 +57,7 @@ export default async function Devices({ params }: { params: Promise<{ cid: strin
         </Card>
 
         {!!failures?.length && (
-          <Card title={`Problems in the last 7 days (${failures.length})`} description="Punches a device sent that couldn't be saved, and background jobs that failed. HR and the Company Admin are alerted (at most once an hour per device)." pad={false}>
+          <Card title={`Problems in the last 7 days (${failures.length})`} description="Punches a device sent that couldn't be saved, and background jobs that failed. HR and the Owner are alerted (at most once an hour per device)." pad={false}>
             <Table head={["When", "What", "Device / job", "Detail"]}>
               {failures.map((f, i) => (
                 <tr key={i}><td className="td whitespace-nowrap">{fmtDateTime(f.at)}</td>

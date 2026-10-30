@@ -1,6 +1,6 @@
 // Two independent Supabase sessions on one site address.
 //
-// The company session (employees, HR, company administrators) uses Supabase's default cookie on
+// The company session (Owners, HR, employees) uses Supabase's default cookie on
 // path "/". The platform admin portal keeps its own session in a differently named cookie restricted
 // to path "/admin": browsers send it only to /admin pages, and only clients created with the "admin"
 // scope read it. So an admin and an employee can be signed in at the same time in one browser, and

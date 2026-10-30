@@ -13,7 +13,7 @@ import { otherOrigin } from "@/lib/origins";
 export type Portal = "company" | "hr";
 
 /**
- * The company sign-in (employees, HR Managers, company administrators), used at "/", "/login" and "/hr".
+ * The company sign-in (Owners, HR Managers, employees), used at "/", "/login" and "/hr".
  * portal "hr" only lets in someone who is HR Manager in the selected company; that is checked on the
  * server (loginPassword → my_access), not here. The admin portal (/admin) has its own sign-in and session.
  */
@@ -58,7 +58,7 @@ export async function CompanySignIn({ mode, next, pending, portal = "company", b
         </div>
       )}
       {pending && <p role="status" className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-        Request sent. An administrator of your company will check your details; you can sign in once you&apos;re approved.</p>}
+        Request sent. Your company&apos;s Owner will check your details; you can sign in once you&apos;re approved.</p>}
       {!current && codes && (
         <div className="mt-6 grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-sm font-medium">
           <Link href={q()} className={`rounded-md py-1.5 text-center transition ${!otp ? "bg-surface text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Password</Link>

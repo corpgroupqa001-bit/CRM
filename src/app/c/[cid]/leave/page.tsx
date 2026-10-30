@@ -18,11 +18,13 @@ export default async function Leave({ params, searchParams }: { params: Promise<
   // Leave Management is outside Phase 1 (enabled only through platform_features)
   if (!leaveEnabled(ctx.perms)) redirect(`/c/${cid}/denied`);
   const { supabase, perms, employee } = ctx;
+  // the Super Admin never approves or rejects leave (decision of 30 Oct, 0052; the database refuses it too)
+  const approver = perms.has("attendance.approve") && ctx.role !== "super_admin";
   const year = Number(todayIST().slice(0, 4));
   const base = `/c/${cid}/leave`;
   const tabs = [
     { key: "mine", label: "My leave", href: base },
-    ...(perms.has("attendance.approve") ? [{ key: "approvals", label: "Approvals", href: `${base}?tab=approvals` }] : []),
+    ...(approver ? [{ key: "approvals", label: "Approvals", href: `${base}?tab=approvals` }] : []),
     ...(perms.has("leave.manage") ? [{ key: "types", label: "Leave types & balances", href: `${base}?tab=types` }] : []),
   ];
   let body: React.ReactNode = null;
@@ -84,7 +86,7 @@ export default async function Leave({ params, searchParams }: { params: Promise<
     }
   }
 
-  if (tab === "approvals" && perms.has("attendance.approve")) {
+  if (tab === "approvals" && approver) {
     const { data: reqs } = await supabase.from("leave_requests").select("*, leave_types(code), employees(first_name, last_name, emp_code)")
       .eq("company_id", cid).neq("employee_id", employee?.id ?? "").order("created_at", { ascending: false }).limit(100);
     const pending = (reqs ?? []).filter((r) => r.status === "pending").length;

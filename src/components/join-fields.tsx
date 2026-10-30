@@ -29,9 +29,9 @@ export function JoinFields({ options, path }: { options: JoinOptions; path: stri
         <Link href={path} className="text-xs font-medium text-brand-600 hover:underline">Change</Link>
       </div>
       <DepartmentDesignation departments={options.departments} designations={options.designations}
-        designationHint="Your access is set from your designation once an administrator approves you." />
+        designationHint="Your access is set from your designation once the company's Owner approves you." />
       <Field label="Mobile number"><input className="input" name="phone" type="tel" required autoComplete="tel" placeholder="98480 22338" /></Field>
-      <Field label="Anything the administrator should know (optional)"><input className="input" name="note" placeholder="e.g. joined on 1 Nov, reporting to Priya" /></Field>
+      <Field label="Anything the Owner should know (optional)"><input className="input" name="note" placeholder="e.g. joined on 1 Nov, reporting to Priya" /></Field>
     </>
   );
 }

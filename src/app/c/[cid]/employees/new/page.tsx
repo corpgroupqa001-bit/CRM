@@ -12,10 +12,10 @@ export default async function NewEmployee({ params }: { params: Promise<{ cid: s
   const ctx = await getCtx(cid);
   requirePerm(ctx, "employees.create");
   const o = await jobOptions(ctx);
-  const canAccount = ctx.perms.has("employees.account");   // invitation (HR / Payroll, administrators)
-  const canSetRole = ctx.perms.has("employees.assign_role");   // system role (Owner, Company Admin)
+  const canAccount = ctx.perms.has("employees.account");   // invitation (HR / Payroll, the Owner)
+  const canSetRole = ctx.perms.has("employees.assign_role");   // system role (the Owner)
   const canSalary = ctx.perms.has("salaries.manage");
-  // Owner / Company Admin: people from their other companies, to add or move here (0036)
+  // Owner: people from their other companies, to add or move here (0036)
   const fromOthers = canSetRole ? await Promise.all([
     ctx.supabase.rpc("people_from_my_companies", { p_company: cid }),
     ctx.supabase.from("designations").select("id, name, department_id").eq("company_id", cid).eq("active", true).order("name"),
@@ -34,7 +34,7 @@ export default async function NewEmployee({ params }: { params: Promise<{ cid: s
       <ActionForm action={createEmployee.bind(null, cid)} className="space-y-6">
         <Card title="Personal details"><div className="grid gap-4 md:grid-cols-2"><PersonalFields /></div></Card>
         <Card title="Job details"><div className="grid gap-4 md:grid-cols-3"><JobFields o={o} canSetRole={canSetRole} /></div></Card>
-        {/* the starting salary is set by whoever manages salaries (Administrator, Finance / Payroll) */}
+        {/* the starting salary is set by whoever manages salaries (HR / Payroll) */}
         {canSalary && <Card title="Salary">
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="Annual gross (CTC), ₹"><input className="input" name="annual_ctc" type="number" min={0} step="1" /></Field>
@@ -47,7 +47,7 @@ export default async function NewEmployee({ params }: { params: Promise<{ cid: s
           <SubmitButton>Create employee</SubmitButton>
           {canAccount
             ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="send_invite" defaultChecked /> Email an invitation to activate their account</label>
-            : <span className="text-sm text-slate-500">HR or an administrator sends the invitation.</span>}
+            : <span className="text-sm text-slate-500">HR or the Owner sends the invitation.</span>}
         </div>
       </ActionForm>
     </>

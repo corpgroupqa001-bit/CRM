@@ -2,16 +2,17 @@
 // checked by RLS and by has_perm() in every protected function. The app loads the signed-in user's
 // permissions from the server (my_access) on each request and uses them only to decide what to
 // show; it never sends a role or permission to the server.
-// super_admin is not a company role: my_access reports it for a platform operator acting in a company
-export type Role = "owner" | "company_admin" | "hr" | "manager" | "employee" | "super_admin";
+// super_admin is not a company role: my_access reports it for a platform operator acting in a company.
+// There is no Company Admin: the Owner does its work (decision of 30 Oct 2026, migration 0051).
+export type Role = "owner" | "hr" | "manager" | "employee" | "super_admin";
 
 export const ROLE_LABEL: Record<Role, string> = {
-  owner: "Owner", company_admin: "Administrator", hr: "HR Manager", manager: "Manager", employee: "Employee",
+  owner: "Owner", hr: "HR Manager", manager: "Manager", employee: "Employee",
   super_admin: "Super Admin",
 };
 
-/** roles an administrator can assign (the owner is fixed; super admin is platform-level, not a company role) */
-export const ASSIGNABLE_ROLES: Role[] = ["company_admin", "hr", "manager", "employee"];
+/** roles the Owner can assign (the owner is fixed; super admin is platform-level, not a company role) */
+export const ASSIGNABLE_ROLES: Role[] = ["hr", "manager", "employee"];
 
 export type Perm =
   | "employees.create" | "employees.read_all" | "employees.read_team" | "employees.update" | "employees.delete"
@@ -25,7 +26,7 @@ export type Perm =
 
 export type Perms = ReadonlySet<string>;
 
-/** Custom roles (BRD §5.2): every permission an Owner or Company Admin can tick, grouped by module, in plain words. */
+/** Custom roles (BRD §5.2): every permission the Owner can tick, grouped by module, in plain words. */
 export const PERMISSION_GROUPS: { module: string; perms: [Perm, string][] }[] = [
   { module: "Employees", perms: [
     ["employees.read_all", "See all employees"], ["employees.read_team", "See their own team"],

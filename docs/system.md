@@ -251,26 +251,26 @@ export async function approveRun(cid: string, runId: string, _: ActionState): Pr
 
 ## 7. Roles and permissions
 
-Every user has one role **per company** in `company_members.role`: `owner`, `company_admin`, `hr` (HR / Payroll), `manager` or `employee`, the default matrix of BRD v2.0 §5.3 (migration 0027). Designation, department, manager, company and status are separate fields and grant nothing. Super Admin is platform-level (`platform_admins`, granted only in SQL) and is not a company role: it manages tenants and subscriptions and sees a company's data only while that company's Company Admin has granted **support access** (Settings → Support access, 1–72 hours, with a reason; `support_access`, `sa_acting`). Everything it does there is audited (`audit_log.via_super_admin`) and it can't approve payroll.
+Every user has one role **per company** in `company_members.role`: `owner`, `hr` (HR / Payroll), `manager` or `employee`. **Decision of 30 Oct 2026 (beyond BRD v2.0 §5.2, migration 0051): there is no Company Admin.** The Owner does everything it did, and the platform Super Admin is the only admin; people who were Company Admin became Super Admins and Employees in their company. A company's owner never changes. Designation, department, manager, company and status are separate fields and grant nothing. Super Admin is platform-level (`platform_admins`, granted only in SQL) and is not a company role: it manages tenants and subscriptions and, by **decision of 30 Oct 2026 (0052, beyond the BRD's "no default access")**, acts as an administrator in every company without a grant: employees (incl. logins and roles), attendance (incl. approvals and month unlock), devices, leave types and balances, settings and policies, roles, projects, tasks and announcements. Never: approving or rejecting leave (refused by the database), salaries and payroll, bank / PAN / statutory details, the audit log, or chat where it doesn't work. Everything it does is audited (`audit_log.via_super_admin`). Settings → Support access was removed.
 
-| Area | Owner | Company Admin | HR / Payroll (`hr`) | Manager | Employee |
-|---|---|---|---|---|---|
-| Companies | Create (sign-up, /owner), edit profile | Read, edit own company | Read | Read | Read |
-| Projects | Full | Full | Read all | Read; update the projects they manage | Member projects (read) |
-| Employees | Full, incl. system roles | Full, incl. system roles | Create, read, update, delete, invite, logins (no system roles) | Own team (read) | Own profile (read, update contact fields) |
-| Attendance | Read | Full; only role that unlocks a month | Full (no unlock) | Team: read, approve | Own; punch / WFH check-in |
-| Leave | Read | Full | Full | Team: read, approve | Apply, read own |
-| Salaries / Payroll | Read, approve, reopen | Read, approve, reopen | Prepare: structures, CTC, inputs, run, bank file | Own payslips | Own payslips |
-| Tasks | Full | Full | Full | Full for their team | Assigned tasks; create tasks for themselves |
-| Settings and audit log | Read | Full | Read | None | None |
-| Chat | Yes | Yes, plus chat controls | Yes | Yes | Yes |
+| Area | Owner | HR / Payroll (`hr`) | Manager | Employee |
+|---|---|---|---|---|
+| Companies | Edit profile; more companies are created by the Super Admin | Read | Read | Read |
+| Projects | Full | Read all | Read; update the projects they manage | Member projects (read) |
+| Employees | Full, incl. system roles | Create, read, update, delete, invite, logins (no system roles) | Own team (read) | Own profile (read, update contact fields) |
+| Attendance | Full; the only role that unlocks a month | Full (no unlock) | Team: read, approve | Own; punch / WFH check-in |
+| Leave | Full | Full | Team: read, approve | Apply, read own |
+| Salaries / Payroll | Read, approve, reopen | Prepare: structures, CTC, inputs, run, bank file | Own payslips | Own payslips |
+| Tasks | Full | Full | Full for their team | Assigned tasks; create tasks for themselves |
+| Settings, roles and audit log | Full (incl. Sign-in security, support access) | Read | None | None |
+| Chat | Yes, plus chat controls | Yes | Yes | Yes |
 
-- **Payroll:** HR / Payroll prepares and runs payroll; the Owner or a Company Admin approves (`salaries.approve`), never the person who ran that run (maker-checker). Employees and managers read their own approved payslips under **My payslips**.
+- **Payroll:** HR / Payroll prepares and runs payroll; the Owner approves (`salaries.approve`), never the person who ran that run (maker-checker). Employees and managers read their own approved payslips under **My payslips**.
 - **Sign-up:** owners sign up with name, email and company name and become that company's Owner (`create_company_for`, 0028); an owner adds further companies from `/owner` or the company switcher. Employees don't self-register: HR adds them and sends an invitation (`join_requests` only keeps requests made before 0028).
 - **Switching company** needs no new sign-in (AUTH-11): the signed `cg_company` cookie (`lib/auth/company-lock.ts`, `middleware.ts`) just records the company the session has open; membership is checked by `my_access` on every page.
 - **Removing** an employee: exited, access revoked, `removed_at` set and hidden from lists; history kept. Employees with attendance or payroll history can't be deleted.
 - The **staff directory** (`employee_directory`) shows every member only name, code, work email, photo, department, designation, branch, reporting line and status.
-- Nobody can change their own membership or role. Choosing a system role needs `employees.assign_role` (Owner, Company Admin); invitations and logins need `employees.account` (also HR).
+- Nobody can change their own membership or role. Choosing a system role needs `employees.assign_role` (the Owner); invitations and logins need `employees.account` (also HR).
 
 - The **database** is the source of truth: `role_permissions` maps roles to permissions, and RLS policies and functions call `has_perm(company, perm)`. `in_good_standing` denies users whose employee record is inactive or exited. Migrations `0018_rbac`, `0019_rbac_decisions` and `0027_brd_v2_alignment` (BRD v2.0 matrix).
 - **At sign-in and on every request**, `getCtx()` (`lib/context.ts`) calls `my_access(company)` and gets `{allowed, reason, role, permissions}` from the server. Nothing the browser sends is trusted. A denied user goes to `/denied`.
@@ -356,7 +356,7 @@ flowchart LR
 
 - The calculation follows BRD §9 in order: payable days → proration ratio → earnings (prorated components, arrears, OT, bonus, incentive, encashment, gratuity, reimbursements) → PF / ESI / PT / LWF → TDS (regime-aware projection) → loans and recoveries → net pay never below zero (shortfall carried forward) → rounding per line.
 - Each run is **versioned**. Running again supersedes the previous draft, and `payroll_runs.changes` lists each employee whose net pay changed.
-- **Maker-checker:** the Owner or a Company Admin approves (`salaries.approve`), never the person who ran that run; HR / Payroll prepares. The Super Admin cannot approve.
+- **Maker-checker:** the Owner approves (`salaries.approve`), never the person who ran that run; HR / Payroll prepares. The Super Admin cannot approve.
 - Only the owner or a company admin can **reopen** a finalized run, with a reason and the month typed as `YYYY-MM` to confirm.
 - Employees see their payslips only after the run is **locked**.
 - Payslip PDFs are generated on demand (`/api/payslip/[id]`), optionally password-protected (`companies.payslip_password`).

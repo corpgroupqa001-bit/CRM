@@ -41,7 +41,7 @@ How the system fits together: [`docs/system.md`](docs/system.md). Database schem
 
 ## Roles and Super Admin
 
-Company roles (one per company, `company_members.role`): **Owner / Administrator**, **HR Manager**, **Finance / Payroll**, **Manager**, **Employee**. What each role can do is the `role_permissions` table (migrations `0018_rbac`, `0019_rbac_decisions`), enforced by RLS and database functions; the app only hides what the database would refuse anyway. Designation and department never grant access. An inactive or exited employee is denied.
+Company roles (one per company, `company_members.role`): **Owner**, **HR / Payroll**, **Manager**, **Employee**. There is no Company Admin (decision of 30 Oct 2026, migration 0051): the Owner does that work and the Super Admin is the only admin. What each role can do is the `role_permissions` table (migrations `0018_rbac`, `0019_rbac_decisions`, `0027`, `0051`), enforced by RLS and database functions; the app only hides what the database would refuse anyway. Designation and department never grant access. An inactive or exited employee is denied.
 
 **Super Admin** is platform-level and is never granted automatically. Grant it in the Supabase SQL Editor:
 
@@ -50,9 +50,9 @@ insert into platform_admins (user_id) select id from profiles where email = 'ope
 -- revoke: delete from platform_admins where user_id = (select id from profiles where email = 'operator@example.com');
 ```
 
-A super admin opens `/admin` to manage companies (plan, seats, renewal, status) and their administrators, and can **Open** any company to act as its Administrator (employees, roles, settings, payroll view and run). It can't approve or reopen payroll, and it can't make itself a company member. Every company it opens and every change it makes is in that company's audit log, flagged `via_super_admin`.
+A super admin opens `/admin` to create companies and manage their plan, seats, renewal and status. A company's owner never changes, and there are no company administrators to add. Inside every company it acts as an administrator (decision of 30 Oct 2026, migration 0052): employees, attendance, devices, leave types and balances, settings, roles, projects, tasks and announcements. It never approves or rejects leave, never sees salaries, payroll, bank or PAN details or the audit log, and it can't make itself a company member. Every company it opens and every change it makes is in that company's audit log, flagged `via_super_admin`.
 
-**Joining a company:** a candidate signs up at `/signup`, choosing their company, designation, department and mobile number. They can't sign in until an Owner / Administrator of that company approves them in **Employees → Sign-up approvals**; approval happens once. The access role starts from the designation's mapping (**Settings → Departments & designations → Access by designation**, Administrators only) and the approver confirms or changes it.
+**Joining a company:** a candidate signs up at `/signup`, choosing their company, designation, department and mobile number. They can't sign in until the Owner of that company approves them in **Employees → Sign-up approvals**; approval happens once. The access role starts from the designation's mapping (**Settings → Departments & designations → Access by designation**, the Owner only) and the approver confirms or changes it.
 
 **Switching company** asks for the password again. The first company opened within 10 minutes of signing in opens straight away. The signed cookie uses `COMPANY_LOCK_SECRET` (falls back to `OTP_PEPPER`).
 

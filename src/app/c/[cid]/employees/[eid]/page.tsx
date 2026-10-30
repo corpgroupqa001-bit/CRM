@@ -34,8 +34,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
   const e = (full ?? payView) as ({ first_name: string; last_name: string | null } & Record<string, any>) | null;
   if (!e) notFound();
   const tab = payOnly ? "statutory" : sp.tab ?? "profile";
-  const hr = perms.has("employees.update");        // HR Manager and Administrator: employee records
-  const acct = perms.has("employees.account");     // HR / Payroll and administrators: invitations, login, activation
+  const hr = perms.has("employees.update");        // HR Manager and Owner: employee records
+  const acct = perms.has("employees.account");     // HR / Payroll and the Owner: invitations, login, activation
   const self = me?.id === eid;
   const base = `/c/${cid}/employees/${eid}`;
   const [{ data: dir }, { data: superAdmin }] = await Promise.all([
@@ -48,7 +48,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     // everything about signing in, in one place (decision of 29 Oct)
     ...(acct ? [{ key: "access", label: "Login & access", href: `${base}?tab=access` }] : []),
     ...(hr ? [{ key: "job", label: "Job", href: `${base}?tab=job` }] : []),
-    { key: "statutory", label: "Statutory & bank", href: `${base}?tab=statutory` },
+    // bank, PAN and statutory details are payroll data: not for the Super Admin (decision of 30 Oct)
+    ...(ctx.role !== "super_admin" ? [{ key: "statutory", label: "Statutory & bank", href: `${base}?tab=statutory` }] : []),
     { key: "documents", label: "Documents", href: `${base}?tab=documents` },
     ...(perms.has("attendance.manage") ? [{ key: "devices", label: "Biometric IDs", href: `${base}?tab=devices` }] : []),
     ...(perms.has("salaries.read") ? [{ key: "salary", label: "Salary", href: `${base}?tab=salary` }] : []),
@@ -91,7 +92,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     );
   }
 
-  if (tab === "statutory") {
+  if (tab === "statutory" && ctx.role !== "super_admin") {
     const { data: reqs } = await supabase.from("employee_change_requests").select("*").eq("employee_id", eid).order("created_at", { ascending: false }).limit(5);
     body = (
       <div className="space-y-6">
@@ -193,7 +194,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
   if (tab === "lifecycle" && hr) {
     const o = await jobOptions(ctx);
     const { data: myCompanies } = await supabase.from("company_members").select("role, companies(id, name)").eq("user_id", ctx.user.id).eq("active", true)
-      .in("role", ["owner", "company_admin", "hr"]);
+      .in("role", ["owner", "hr"]);
     const otherCompanies = (myCompanies ?? []).map((m) => m.companies as unknown as { id: string; name: string }).filter((c) => c.id !== cid);
     const { data: events } = await supabase.from("employee_events").select("*").eq("employee_id", eid).order("effective_date", { ascending: false });
     const act = lifecycle.bind(null, cid, eid);
@@ -258,7 +259,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
   }
 
   if (tab === "access" && acct) {
-    // AUTH-02 / AUTH-15: lockout state and recent sign-ins (login history is readable by the Owner and Company Admin)
+    // AUTH-02 / AUTH-15: lockout state and recent sign-ins (login history is readable by the Owner)
     const [locked, { data: logins }] = e.user_id
       ? await Promise.all([lockStatus(String(e.email).toLowerCase()),
           supabase.from("login_history").select("at, ip, user_agent, method").eq("user_id", e.user_id).order("at", { ascending: false }).limit(10)])

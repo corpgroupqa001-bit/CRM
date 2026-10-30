@@ -1,5 +1,6 @@
 // Adding an existing employee to another company: keep them, or move them out of chosen companies
-// (decision of 27 Oct 2026, migration 0036). Only Owners / Company Admins of the companies involved.
+// (decision of 27 Oct 2026, migration 0036). Only Owners of the companies involved
+// (the Company Admin role was removed on 30 Oct).
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import { asUser, createDb, createUser } from "./db";
@@ -20,13 +21,13 @@ beforeAll(async () => {
   for (const [k, name] of [["A", "Alpha"], ["B", "Bravo"], ["X", "Xray"]]) {
     C[k] = (await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, $2) returning id`, [k === "X" ? U.other : U.owner, name]))[0].id;
   }
-  await sys(`insert into company_members (company_id, user_id, role) values ($1, $2, 'company_admin'), ($3, $4, 'hr'), ($1, $5, 'employee'), ($3, $5, 'employee'), ($3, $6, 'employee'), ($7, $6, 'employee')`,
+  await sys(`insert into company_members (company_id, user_id, role) values ($1, $2, 'hr'), ($3, $4, 'hr'), ($1, $5, 'employee'), ($3, $5, 'employee'), ($3, $6, 'employee'), ($7, $6, 'employee')`,
     [C.B, U.adminB, C.A, U.hrA, U.ravi, U.sita, C.X]);
   await emp(C.A, "ravi"); await emp(C.B, "ravi"); await emp(C.A, "sita"); await emp(C.X, "sita");
 });
 
 describe("people from my other companies (0036)", () => {
-  it("lists people of the companies I manage, not yet here; only for Owners / Company Admins", async () => {
+  it("lists people of the companies I manage, not yet here; only for Owners", async () => {
     // a new company C2 of the same owner: Ravi (A, B) and Sita (A) are listed; Sita's Xray record isn't visible
     C.C2 = (await sys<{ id: string }>(`insert into companies (owner_id, name) values ($1, 'Charlie') returning id`, [U.owner]))[0].id;
     const rows = await as<{ full_name: string; email: string; companies: { company: string }[] }>("owner", `select * from people_from_my_companies($1)`, [C.C2]);
@@ -34,7 +35,7 @@ describe("people from my other companies (0036)", () => {
     expect(rows[0].companies.map((c) => c.company)).toEqual(["Alpha", "Bravo"]);
     expect(rows[1].companies.map((c) => c.company)).toEqual(["Alpha"]);
     await expect(as("hrA", `select * from people_from_my_companies($1)`, [C.A])).rejects.toThrow(/not allowed/);
-    expect(await as("adminB", `select * from people_from_my_companies($1)`, [C.B])).toEqual([]);   // manages only Bravo
+    await expect(as("adminB", `select * from people_from_my_companies($1)`, [C.B])).rejects.toThrow(/not allowed/);   // HR of Bravo
   });
 
   it("Add keeps them where they are; only basic details are copied; their login opens the new company", async () => {

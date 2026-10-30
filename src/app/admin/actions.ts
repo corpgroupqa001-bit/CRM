@@ -28,7 +28,7 @@ export async function adminSignIn(_: ActionState, fd: FormData): Promise<ActionS
     const { data: superAdmin } = await supabase.rpc("is_super_admin");
     if (!superAdmin) {
       await supabase.auth.signOut({ scope: "local" });
-      return { error: "This sign-in is only for the platform Super Admin. Employees, HR Managers and company administrators sign in on the main page." };
+      return { error: "This sign-in is only for the platform Super Admin. Owners, HR Managers and employees sign in on the main page." };
     }
     // first activity stamp: the session is signed out after 15 minutes without admin activity
     const sid = sessionIdOf(data.session.access_token);
