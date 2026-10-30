@@ -46,6 +46,7 @@ const PURPOSE_TEXT: Record<string, string> = {
   reset: "Use this code to reset your password.",
   invite: "Use this code to activate your account.",
   change_email: "Use this code to confirm your new email address.",
+  join: "Use this code to verify your email and send your request to join your company.",
 };
 
 export function otpEmail(to: string, code: string, purpose: string, link?: string): Mail {

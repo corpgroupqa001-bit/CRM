@@ -6,7 +6,7 @@ export const metadata = { title: "Verify your email" };
 
 const TITLES: Record<string, string> = {
   signup: "Verify your email", login: "Enter your sign-in code", reset: "Reset your password",
-  invite: "Activate your account", change_email: "Confirm your new email",
+  invite: "Activate your account", change_email: "Confirm your new email", join: "Verify your email",
 };
 
 export default async function VerifyPage({ searchParams }: { searchParams: Promise<{ email?: string; purpose?: string; next?: string }> }) {

@@ -19,6 +19,8 @@ import { COMPANY_LOCK_COOKIE, lockCookieOptions, sessionIdOf, signCompanyLock } 
 import { companyAccessError, companyLanding, UUID_RE, type Access } from "@/lib/auth/company-login";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// the same rule as the employee record (employees_phone_format, 0012)
+const PHONE_RE = /^\+?[0-9][0-9 ()-]{6,19}$/;
 
 const verifyUrl = (email: string, purpose: OtpPurpose, next?: string | null) =>
   `/verify?${new URLSearchParams({ email, purpose, ...(next ? { next } : {}) })}`;
@@ -92,6 +94,53 @@ async function signupWithPassword(name: string, email: string, company: string, 
   redirect(`/c/${cid}/dashboard`);
 }
 
+// ---------------------------------------------------------------------------
+// AUTH-19 employee self sign-up with the company's link or code (revised BRD, 30 Oct; 0056): name, email,
+// mobile and the projects to join → (email code, when verification is on) → password. The account stays
+// pending, with no company access, until the Owner or the Admin approves it on Requests.
+// ---------------------------------------------------------------------------
+export async function joinStart(_: ActionState, fd: FormData): Promise<ActionState> {
+  const code = (str(fd, "code") ?? "").toUpperCase();
+  const name = str(fd, "name");
+  const email = normaliseEmail(str(fd, "email") ?? "");
+  const phone = str(fd, "phone");
+  const projects = fd.getAll("project").map(String);
+  if (!name || !EMAIL_RE.test(email)) return { error: "Enter your name and a valid email." };
+  if (!phone) return { error: "Enter your mobile number." };
+  if (!PHONE_RE.test(phone)) return { error: "Enter a valid mobile number, e.g. 98480 22338." };
+  if (fd.get("consent") !== "on") return { error: "Please agree to the privacy notice to continue." };
+  let company: string;
+  try {
+    const { data } = await createAdminClient().rpc("join_code_lookup", { p_code: code });
+    if (!data) return { error: "That sign-up code is not valid. Ask your company for the current link or code." };
+    company = (data as { company: string }).company;
+    if (await findUserByEmail(email)) return { error: "An account with this email already exists. Sign in, or ask HR to add you to this company." };
+    if (emailVerificationOn()) {
+      await sendCode(email, "join", { code, name, phone, projects }, `/join/sent?company=${encodeURIComponent(company)}`);
+    } else {
+      const password = String(fd.get("password") ?? "");
+      if (!validPassword(password)) return { error: PASSWORD_RULE };
+      if (password !== String(fd.get("confirm") ?? "")) return { error: "The passwords don't match." };
+      const user = await createPasswordUser(email, password, name);
+      try {
+        await initProfile(user.id, name);
+        await joinCompanyFor(user.id, code, name, phone, projects);
+      } catch (err) {
+        await createAdminClient().auth.admin.deleteUser(user.id);   // no account without its request
+        throw err;
+      }
+    }
+  } catch (err) {
+    return otpError(err);
+  }
+  redirect(emailVerificationOn() ? verifyUrl(email, "join", `/join/sent?company=${encodeURIComponent(company)}`) : `/join/sent?company=${encodeURIComponent(company)}`);
+}
+
+async function joinCompanyFor(userId: string, code: string, name: string, phone: string, projects: string[]) {
+  const { error } = await createAdminClient().rpc("join_company_for", { p_user: userId, p_code: code, p_full_name: name, p_phone: phone, p_projects: projects });
+  if (error) throw error;
+}
+
 async function createCompanyFor(userId: string, name: string): Promise<string> {
   const { data, error } = await createAdminClient().rpc("create_company_for", { p_user: userId, p_name: name });
   if (error) throw error;
@@ -122,8 +171,8 @@ async function approvalGate(userId: string): Promise<string | null> {
   ]);
   if (count || sa) return null;
   const req = await latestJoinRequest(userId);
-  if (req?.status === "pending") return `Your request to join ${req.company} is waiting for the company's Owner to approve it. You can sign in once it's approved.`;
-  if (req?.status === "rejected") return `Your request to join ${req.company} was not approved${req.decision_note ? `: ${req.decision_note}` : ""}. Contact the company's Owner.`;
+  if (req?.status === "pending") return `Your request to join ${req.company} is waiting for the Owner or the Admin to approve it. You can sign in once it's approved.`;
+  if (req?.status === "rejected") return `Your request to join ${req.company} was not approved${req.decision_note ? `: ${req.decision_note}` : ""}. Contact the company's Owner or the Admin.`;
   return null;
 }
 
@@ -265,6 +314,14 @@ async function completeVerification(rec: OtpRecord, next: string | null): Promis
     // AUTH-01: the verified owner's company; then they set a password
     const cid = payload.company ? await createCompanyFor(user.id, payload.company) : null;
     return `/set-password?next=${encodeURIComponent(cid ? `/c/${cid}/dashboard` : "/onboarding")}&welcome=1`;
+  } else if (purpose === "join") {
+    // AUTH-19: the verified employee's request goes to the Owner and the Admin; they set a password now
+    const payload = rec.payload as { code: string; name: string; phone: string; projects: string[] };
+    const user = await ensureUser(email, payload.name);
+    await initProfile(user.id, payload.name);
+    await joinCompanyFor(user.id, payload.code, payload.name, payload.phone, payload.projects ?? []);
+    await signInVerifiedEmail(email, "signup");
+    return `/set-password?next=${encodeURIComponent(next && next.startsWith("/") ? next : "/join/sent")}&welcome=1`;
   } else if (purpose === "login") {
     if (!(await findUserByEmail(email))) throw new OtpError("not_found", "No account for this email.");
     await signInVerifiedEmail(email, "otp");

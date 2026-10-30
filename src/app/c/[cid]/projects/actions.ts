@@ -68,3 +68,25 @@ export async function removeMember(cid: string, pid: string, eid: string) {
   await supabase.from("project_members").delete().eq("project_id", pid).eq("employee_id", eid);
   revalidatePath(`/c/${cid}/projects/${pid}`);
 }
+
+// AUTH-18 / COM-15: an employee asks to join projects; the Owner or the Admin decides each one (0056)
+export async function requestProjects(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    const ids = fd.getAll("project").map(String);
+    if (!ids.length) throw new Error("Tick at least one project.");
+    const n = must(await ctx.supabase.rpc("request_projects", { p_company: cid, p_projects: ids })) as number;
+    revalidatePath(`/c/${cid}/projects`);
+    return n ? `Request sent for ${n} project${n === 1 ? "" : "s"}. You'll be told when it's decided.` : "You already asked for these.";
+  });
+}
+
+export async function decideProjectRequest(cid: string, id: string, approve: boolean, _: ActionState, fd: FormData): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "projects.manage_all");
+    must(await ctx.supabase.rpc("decide_project_request", { p_id: id, p_approve: approve, p_note: str(fd, "note") }));
+    revalidatePath(`/c/${cid}/requests`);
+    return approve ? "Approved." : "Rejected.";
+  });
+}

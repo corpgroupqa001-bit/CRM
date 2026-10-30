@@ -280,3 +280,13 @@ export async function deleteSchedule(cid: string, id: string) {
   await supabase.from("report_schedules").delete().eq("id", id);
   revalidatePath(`/c/${cid}/settings`);
 }
+
+// AUTH-19: a new sign-up code for this company; the old link and code stop working at once (0056)
+export async function regenerateJoinCode(cid: string, _: ActionState): Promise<ActionState> {
+  return attempt(async () => {
+    const ctx = await getCtx(cid);
+    assertPerm(ctx, "settings.manage");
+    const code = must(await ctx.supabase.rpc("regenerate_join_code", { p_company: cid })) as string;
+    return done(cid, `New code: ${code}. The old link and code no longer work.`);
+  });
+}

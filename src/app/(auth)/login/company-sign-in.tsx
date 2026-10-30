@@ -96,7 +96,8 @@ export async function CompanySignIn({ mode, next, pending, portal = "company", b
           <p>Not an HR Manager? <Link href="/" className="font-medium text-brand-600 hover:text-brand-700">Employee sign-in</Link></p>
         ) : (
           <>
-            <p>New here? <Link href="/signup" className="font-medium text-brand-600 hover:text-brand-700">Create an account</Link></p>
+            <p>Joining your company? <Link href="/join" className="font-medium text-brand-600 hover:text-brand-700">Sign up with its link or code</Link></p>
+            <p>Business owner? <Link href="/signup" className="font-medium text-brand-600 hover:text-brand-700">Create a company account</Link></p>
             <p>Invited by your employer? <Link href="/activate" className="font-medium text-brand-600 hover:text-brand-700">Activate your account</Link></p>
           </>
         )}

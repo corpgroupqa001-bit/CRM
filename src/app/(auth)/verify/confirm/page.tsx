@@ -6,7 +6,7 @@ export const metadata = { title: "Verify your email" };
 
 const ACTION: Record<string, string> = {
   signup: "Verify email and create my account", login: "Sign me in", reset: "Verify and reset my password",
-  invite: "Verify and activate my account", change_email: "Confirm my new email",
+  invite: "Verify and activate my account", change_email: "Confirm my new email", join: "Verify and send my request",
 };
 
 // Opened from the "Verify email" button in the email. Nothing happens until the user presses the

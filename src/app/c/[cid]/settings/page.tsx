@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { getCtx, requirePerm } from "@/lib/context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -5,7 +6,7 @@ import { Badge, Card, Field, PageHeader, Table, Tabs } from "@/components/ui";
 import { fmtDate, fmtDateTime, label } from "@/lib/format";
 import { ASSIGNABLE_ROLES, PERMISSION_GROUPS, ROLE_LABEL, type Role } from "@/lib/rbac";
 import { LOCKOUT_CHOICES, lockoutLabel } from "@/lib/auth/lockout";
-import { addHoliday, addSchedule, deleteRow, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, saveSignInSecurity, setMemberRole, cloneRole, saveRole, deleteRole, saveDefaultRole, resetDefaultRole } from "./actions";
+import { addHoliday, addSchedule, deleteRow, saveDepartment, saveDesignation, setDesignationAccess, setOrgActive, deleteSchedule, resolveDataRequest, saveBranch, saveChatSettings, saveCompany, savePolicies, saveSignInSecurity, regenerateJoinCode, setMemberRole, cloneRole, saveRole, deleteRole, saveDefaultRole, resetDefaultRole } from "./actions";
 
 export const metadata = { title: "Settings" };
 
@@ -66,7 +67,14 @@ export default async function Settings({ params, searchParams }: { params: Promi
   }
 
   if (tab === "company") {
-    const { count: active } = await supabase.from("employees").select("id", { count: "exact", head: true }).eq("company_id", cid).in("status", ["active", "notice"]);
+    const [{ count: active }, { data: jc }] = await Promise.all([
+      supabase.from("employees").select("id", { count: "exact", head: true }).eq("company_id", cid).in("status", ["active", "notice"]),
+      supabase.from("companies").select("join_code").eq("id", cid).single(),
+    ]);
+    // AUTH-19: the link employees sign up with (this site's own address, so it works on staging too)
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+    const joinLink = `${h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https")}://${host}/join?code=${jc?.join_code ?? ""}`;
     body = (
       <div className="space-y-6">
         <Card title="Subscription" description="Plan, seats and renewal for this company">
@@ -77,6 +85,15 @@ export default async function Settings({ params, searchParams }: { params: Promi
             <div><div className="text-xs text-slate-500">Status</div><div className="mt-0.5"><Badge value={company.status} /></div></div>
           </div>
           <p className="mt-3 text-xs text-slate-500">Plans and seat limits are managed by the platform operator. Contact support to change your plan.</p>
+        </Card>
+        <Card title="Employee sign-up link" description="Share this link or code with new employees. They sign up, pick their projects and wait for approval on Requests. Nobody can join without it.">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div><div className="text-xs text-slate-500">Company code</div><div className="mt-0.5 font-mono text-lg font-semibold tracking-widest">{jc?.join_code}</div></div>
+            <div className="sm:col-span-2 min-w-0"><div className="text-xs text-slate-500">Sign-up link</div><div className="mt-0.5 truncate font-mono text-sm text-slate-700" title={joinLink}>{joinLink}</div></div>
+          </div>
+          {admin && <ActionForm action={regenerateJoinCode.bind(null, cid)} className="mt-4" confirm="Make a new code? The current link and code stop working straight away.">
+            <SubmitButton className="btn-secondary btn-sm">Make a new code</SubmitButton>
+          </ActionForm>}
         </Card>
         {body}
       </div>

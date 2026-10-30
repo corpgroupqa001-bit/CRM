@@ -2,7 +2,7 @@
 // the Supabase-backed store lives in otp-store.ts.
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 
-export type OtpPurpose = "signup" | "login" | "reset" | "invite" | "change_email";
+export type OtpPurpose = "signup" | "login" | "reset" | "invite" | "change_email" | "join";
 
 export interface OtpRecord {
   id: string;

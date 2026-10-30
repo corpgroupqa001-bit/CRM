@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bell, Building2, CalendarCheck, Check, ChevronsUpDown, CornerDownLeft, Fingerprint, FolderKanban, IndianRupee,
   LayoutDashboard, ListChecks, LogOut, Megaphone, Menu, MessageSquare, Plane, Receipt, Search, Settings, UserCircle,
-  Users, X, KeyRound, ShieldCheck,
+  Users, X, KeyRound, ShieldCheck, Inbox,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/ui";
@@ -13,7 +13,7 @@ import { NavLink } from "@/components/nav-link";
 import { SessionGuard } from "@/components/session-guard";
 import { ThemeSwitch, ThemeToggle } from "@/components/theme-toggle";
 
-const ICONS = { LayoutDashboard, Users, Fingerprint, CalendarCheck, Plane, IndianRupee, Receipt, FolderKanban, ListChecks, MessageSquare, Megaphone, Settings, UserCircle };
+const ICONS = { LayoutDashboard, Users, Fingerprint, CalendarCheck, Plane, IndianRupee, Receipt, FolderKanban, ListChecks, MessageSquare, Megaphone, Settings, UserCircle, Inbox };
 
 type Props = {
   companyId: string;

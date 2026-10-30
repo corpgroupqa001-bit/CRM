@@ -68,11 +68,13 @@ export const NAV: NavItem[] = [
   { href: "leave", label: "Leave", icon: "Plane", group: "My work", show: leaveEnabled },
   { href: "payslips", label: "My payslips", icon: "Receipt", group: "My work", show: () => true },
   { href: "tasks", label: "Tasks", icon: "ListChecks", group: "Collaboration", show: has("tasks.use", "tasks.read_all") },
+  { href: "projects", label: "Projects", icon: "FolderKanban", group: "Collaboration", show: has("projects.use", "projects.manage_all") },
   { href: "chat", label: "Chat", icon: "MessageSquare", group: "Collaboration", show: has("chat.use") },
   { href: "announcements", label: "Announcements", icon: "Megaphone", group: "Collaboration", show: () => true },
   { href: "employees", label: "Employees", icon: "Users", group: "People & payroll", show: has("employees.read_all", "employees.read_team", "employees.pay_fields") },
   { href: "attendance", label: "Attendance", icon: "CalendarCheck", group: "People & payroll", show: has("attendance.read_all", "attendance.read_team") },
   { href: "payroll", label: "Payroll", icon: "IndianRupee", group: "People & payroll", show: has("salaries.read") },
+  { href: "requests", label: "Requests", icon: "Inbox", group: "Administration", show: has("projects.manage_all") },
   { href: "settings", label: "Settings", icon: "Settings", group: "Administration", show: has("settings.read") },
 ];
 

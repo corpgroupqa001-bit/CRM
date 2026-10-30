@@ -9,3 +9,13 @@ describe("net pay in words (SAL-20)", () => {
     expect(rupeesInWords(0)).toBe("Rupees Zero Only");
   });
 });
+
+describe("errorMessage: database checks become plain sentences", () => {
+  it("names the field instead of the constraint", async () => {
+    const { errorMessage } = await import("../src/lib/actions");
+    expect(errorMessage({ code: "23514", message: 'new row for relation "employees" violates check constraint "employees_phone_format"' }))
+      .toBe("The mobile number isn't valid. Use digits only, e.g. 98480 22338.");
+    expect(errorMessage({ code: "23514", message: 'new row for relation "x" violates check constraint "x_other"' })).toBe("Some of the details aren't valid. Check them and try again.");
+    expect(errorMessage({ code: "23514", message: "Work from home isn't enabled for this employee; ask HR" })).toBe("Work from home isn't enabled for this employee; ask HR");
+  });
+});

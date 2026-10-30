@@ -61,7 +61,7 @@ export default async function Employees({ params, searchParams }: { params: Prom
     <>
       <PageHeader title="Employees" subtitle={`${count ?? 0} ${sp.status || "active"} employee(s)`}
         actions={<>
-          {perms.has("employees.account") && <Link href={`/c/${cid}/employees/approvals`} className="btn-secondary">Sign-up approvals{(signups ?? 0) > 0 && <> <Badge value="pending" text={String(signups)} /></>}</Link>}
+          {perms.has("employees.account") && <Link href={`/c/${cid}/requests?company=${cid}`} className="btn-secondary">Sign-up requests{(signups ?? 0) > 0 && <> <Badge value="pending" text={String(signups)} /></>}</Link>}
           {perms.has("employees.update") && (pending ?? 0) > 0 && <Link href={`/c/${cid}/employees/requests`} className="btn-secondary">Change requests <Badge value="pending" text={String(pending)} /></Link>}
           {(perms.has("employees.read_all") || perms.has("employees.read_team")) && <Link href={`/c/${cid}/employees/org`} className="btn-secondary">Org chart</Link>}
           {perms.has("employees.read_all") && <a href={`/api/export/employees?company=${cid}`} className="btn-secondary">Export</a>}

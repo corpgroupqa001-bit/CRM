@@ -4,7 +4,7 @@ import { SavedFilters } from "@/components/saved-filters";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Badge, Card, Field, PageHeader, Table } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
-import { saveProject } from "./actions";
+import { requestProjects, saveProject } from "./actions";
 
 export const metadata = { title: "Projects" };
 
@@ -26,11 +26,14 @@ export default async function Projects({ params, searchParams }: { params: Promi
   if (sp.manager) q = q.eq("manager_id", sp.manager);
   if (sp.from) q = q.gte("end_date", sp.from);
   if (sp.to) q = q.lte("start_date", sp.to);
-  const [{ data: projects, count }, { data: people }, { data: tasks }] = await Promise.all([
+  const [{ data: projects, count }, { data: people }, { data: tasks }, { data: joinable }] = await Promise.all([
     q.order("end_date", { ascending: true, nullsFirst: false }).range((page - 1) * PAGE, page * PAGE - 1),
     supabase.from("employee_directory").select("id, full_name").eq("company_id", cid).in("status", ["active", "notice"]).order("first_name"),
     supabase.from("tasks").select("project_id, status").eq("company_id", cid).not("project_id", "is", null),
+    // AUTH-18 / COM-15: projects this person can ask to join (0056)
+    ctx.employee ? supabase.rpc("joinable_projects", { p_company: cid }) : Promise.resolve({ data: [] }),
   ]);
+  const toJoin = (joinable ?? []) as { id: string; name: string; client: string | null; request_status: string | null }[];
   const names = new Map((people ?? []).map((p) => [p.id, p.full_name]));
   const stats = (pid: string) => {
     const t = (tasks ?? []).filter((x) => x.project_id === pid);
@@ -59,6 +62,25 @@ export default async function Projects({ params, searchParams }: { params: Promi
             <Field label="Status"><select className="input" name="status"><option value="planned">Planned</option><option value="active">Active</option><option value="on_hold">On hold</option><option value="completed">Completed</option></select></Field>
             <Field label="Description" className="md:col-span-3"><textarea className="input" name="description" rows={2} /></Field>
             <div className="md:col-span-3 flex gap-2"><SubmitButton>Create project</SubmitButton><Link href="?" className="btn-ghost">Cancel</Link></div>
+          </ActionForm>
+        </Card>
+      )}
+      {toJoin.length > 0 && (
+        <Card title="Join a project" description="Tick the projects you work on. The Owner or the Admin approves each one; you then see its tasks and chat." className="mb-6">
+          <ActionForm action={requestProjects.bind(null, cid)} className="space-y-3" resetOnSuccess>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {toJoin.map((p) => (
+                <li key={p.id}>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" name="project" value={p.id} disabled={p.request_status === "pending"} />
+                    <span className="font-medium text-slate-900">{p.name}</span>{p.client && <span className="text-xs text-slate-500">· {p.client}</span>}
+                    {p.request_status === "pending" && <Badge value="pending" text="Waiting for approval" />}
+                    {p.request_status === "rejected" && <Badge value="rejected" text="Not approved · ask again" />}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <SubmitButton className="btn-secondary">Ask to join</SubmitButton>
           </ActionForm>
         </Card>
       )}

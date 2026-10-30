@@ -410,11 +410,11 @@ describe("Companies (AUTH-01, COM-01): owners create their companies; employees 
     await expect(as("sa", `select sa_create_company('Ghost', 'nobody@corp.in')`)).rejects.toThrow(/No account/);
   });
 
-  it("employees don't self-register: new join requests are refused", async () => {
+  it("employees can't join by picking a company: only with its sign-up code (AUTH-19, 0056; see self-signup.test.ts)", async () => {
     U.cand = await createUser(db, "cand@corp.in");
     const [d] = await sys<{ id: string; department_id: string | null }>(`select id, department_id from designations where company_id = $1 limit 1`, [cid]);
     await expect(as("cand", `select submit_join_request($1, 'Ravi', null, $2, $3, null)`, [cid, d?.id ?? null, d?.department_id ?? null]))
-      .rejects.toThrow(/invitation/);
+      .rejects.toThrow(/sign-up link or code/);
     expect((await perms("cand")).allowed).toBe(false);
   });
 

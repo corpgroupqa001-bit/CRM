@@ -16,6 +16,13 @@ export function errorMessage(err: unknown): string {
   const e = err as { message?: string; code?: string; details?: string };
   if (e?.code === "42501" || /row-level security/i.test(e?.message ?? "")) return e.message && !/row-level/.test(e.message) ? e.message : "You don't have permission to do that.";
   if (e?.code === "23505") return "That already exists.";
+  // a database check that failed: say what is wrong instead of showing the constraint
+  if (/violates check constraint/i.test(e?.message ?? "")) {
+    const c = /constraint "([^"]+)"/.exec(e!.message!)?.[1] ?? "";
+    if (/phone/.test(c)) return "The mobile number isn't valid. Use digits only, e.g. 98480 22338.";
+    if (/email/.test(c)) return "The email address isn't valid.";
+    return "Some of the details aren't valid. Check them and try again.";
+  }
   return e?.message ?? "Something went wrong.";
 }
 

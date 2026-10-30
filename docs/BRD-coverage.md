@@ -13,7 +13,9 @@ Database rules marked † are covered by automated tests (`pnpm test`, 233 tests
 | AUTH-01 owner sign-up | ✅† | `/signup`: name, email, company name → (email code when verification is on) → password; the account owns the new company (`create_company_for`, 0028) |
 | AUTH-02 password rules + lockout | ✅ | 8+ chars, number, special; 5 failures in 15 min lock the login for the company's lock time (15 min default; 30 min, 1 h or 24 h in Settings → Policies, 0041), with "Try again after <time>"; Owner / HR **Unlock now** on the employee's Login & access tab (audited); the lock time has its own Sign-in security box at the top of Settings → Policies (decision of 29 Oct) |
 | AUTH-03 passwordless login | ◐ | built; needs SMTP and `EMAIL_VERIFICATION=on` |
-| AUTH-04 invitation + activation | ◐ | HR / Payroll and administrators invite (`employees.account`); employees no longer self-register (0028). Email needs SMTP |
+| AUTH-04 invitation + activation | ◐ | HR / Payroll and administrators invite (`employees.account`); employees can also sign up themselves with the company code (AUTH-19, 0056). Email needs SMTP |
+| AUTH-18 projects at sign-up | ✅† | Ticked on /join, or later on Projects → Join a project; a dashboard card asks someone in no project to choose; tasks and chat only after approval (0056). `tests/self-signup.test.ts` |
+| AUTH-19 employee self sign-up | ✅† | Company sign-up link and code (Settings → Company; the Admin makes a new code); /join: name, email, mobile, projects, (email code) password; pending with no access until the Owner or the Admin approves on **Requests**; HR then completes the record. Email code needs SMTP on live (0056) |
 | AUTH-05 forgot password | ◐ | other sessions signed out; needs SMTP |
 | AUTH-06/07 OTP storage + limits | ✅† | hashed, 10 min, single use, 5 attempts, 60 s cooldown, 5/hour per email and IP |
 | AUTH-08 Nodemailer over SMTP | ◐ | built. **OI-05 decided 27 Oct 2026: Brevo** (transactional SMTP). D-03 open: a sending domain with SPF + DKIM is still needed before live; until then a verified single sender is used for testing (`pnpm email:test`) |
@@ -32,7 +34,8 @@ Database rules marked † are covered by automated tests (`pnpm test`, 233 tests
 | ID | Status | Where / note |
 |---|---|---|
 | COM-01 owner creates companies | ✅† | sign-up, `/owner` → New company, company switcher; Super Admin can also create one |
-| COM-02 … COM-07, COM-10 … COM-14 | ✅ | branches + geofence, departments and designations, projects, calendar, policies, owner dashboard, lists, project detail, exports, saved filters |
+| COM-02 … COM-07, COM-10 … COM-14 | ✅ | branches (address only since 30 Oct), departments and designations, projects (in the menu since 30 Oct), calendar, policies, owner dashboard, lists, project detail, exports, saved filters |
+| COM-15 project membership approval | ✅† | **Requests** (menu, Owner and Admin): one list of sign-ups and project requests across all their companies, filtered by company and project; approve or reject each project; notified and audited; a rejected project can be asked for again (0056) |
 | COM-08 subscription | ◐ | plan, seats, renewal per company in `/admin`; no billing |
 | COM-09 archive with retention | ✅† | statutory records kept 8 years, other data purged after 90 days (0027) |
 

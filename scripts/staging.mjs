@@ -154,6 +154,12 @@ async function seed() {
   must(await admin.rpc("recalculate_attendance", { p_company: cid, p_from: day, p_to: day }));
 
 
+  // projects employees can ask to join (AUTH-18, COM-15; 0056); Manoj leads the website
+  must(await db.from("projects").insert([
+    { company_id: cid, name: "Website revamp", client: "In-house", status: "active", manager_id: E.manager },
+    { company_id: cid, name: "Store opening", client: "Hyderabad store", status: "planned" },
+  ]));
+
   console.log("\nStaging demo data is ready.");
   printLogins();
 }
@@ -168,5 +174,6 @@ Sign in at http://localhost:3001 (company: Demo Industries), password Demo@12345
   Employee       ravi@demo.test      (September payslip)
   Employee       sita@demo.test      (on-site: device punches today; September payslip)
 Admin portal: http://localhost:3001/admin (Super Admin: admin@demo.test).
+Employee sign-up: Settings → Company shows the sign-up link and code (http://localhost:3001/join).
 `);
 }

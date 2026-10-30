@@ -9,8 +9,8 @@ import { PasswordInput } from "@/components/password-input";
 export const metadata = { title: "Create your company account" };
 
 // AUTH-01 owner sign-up: name, email and company name. With email codes on, the address is verified
-// with a 6-digit code first and the password is set afterwards. Employees don't sign up here: HR adds
-// them and the system emails an invitation (AUTH-04).
+// with a 6-digit code first and the password is set afterwards. Employees sign up on /join with their
+// company's code (AUTH-19) or activate an HR invitation (AUTH-04).
 export default function SignupPage() {
   const codes = emailVerificationOn();
   return (
@@ -32,7 +32,7 @@ export default function SignupPage() {
       </ActionForm>
       <div className="mt-8 space-y-1.5 border-t border-slate-100 pt-6 text-sm text-slate-500">
         <p>Already have an account? <Link href="/login" className="font-medium text-brand-600 hover:text-brand-700">Sign in</Link></p>
-        <p>Joining as an employee? Use the invitation your HR team emailed you, or <Link href="/activate" className="font-medium text-brand-600 hover:text-brand-700">activate your account</Link>.</p>
+        <p>Joining as an employee? <Link href="/join" className="font-medium text-brand-600 hover:text-brand-700">Sign up with your company&apos;s link or code</Link>, or <Link href="/activate" className="font-medium text-brand-600 hover:text-brand-700">activate the invitation</Link> HR emailed you.</p>
       </div>
     </>
   );

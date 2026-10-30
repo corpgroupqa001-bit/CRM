@@ -59,14 +59,18 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
           .eq("status", "missed_punch").gte("date", `${todayIST().slice(0, 7)}-01`),
   ]) : null;
 
-  const [{ data: myDay }, { data: balances }, { data: myTasks }, { data: announcements }] = await Promise.all([
+  const [{ data: myDay }, { data: balances }, { data: myTasks }, { data: announcements }, { data: joinable }, { count: myProjects }] = await Promise.all([
     employee ? supabase.from("daily_attendance").select("status, first_in, last_out").eq("employee_id", employee.id).eq("date", today).maybeSingle() : Promise.resolve({ data: null }),
     employee && leaveOn ? supabase.from("leave_balance_view").select("code, name, opening, accrued, used, pending, paid")
       .eq("employee_id", employee.id).eq("year", Number(today.slice(0, 4))).eq("paid", true) : Promise.resolve({ data: [] }),
     employee && seesTasks ? supabase.from("task_assignees").select("tasks(id, title, status, due_at, priority)").eq("employee_id", employee.id).limit(50)
       : Promise.resolve({ data: [] }),
     supabase.from("announcements").select("id, title, created_at").eq("company_id", cid).order("created_at", { ascending: false }).limit(3),
+    // AUTH-18: someone in no project yet (e.g. just activated an HR invitation) is asked to pick theirs
+    employee ? supabase.rpc("joinable_projects", { p_company: cid }) : Promise.resolve({ data: [] }),
+    employee ? supabase.from("project_members").select("project_id", { count: "exact", head: true }).eq("employee_id", employee.id) : Promise.resolve({ count: 0 }),
   ]);
+  const pickProjects = !myProjects && ((joinable ?? []) as { request_status: string | null }[]).some((p) => !p.request_status);
 
   type T = { id: string; title: string; status: string; due_at: string | null; priority: string };
   const openTasks = ((myTasks ?? []) as unknown as { tasks: T | null }[]).map((r) => r.tasks).filter((t): t is T => !!t && t.status !== "done")
@@ -222,6 +226,10 @@ export default async function Dashboard({ params }: { params: Promise<{ cid: str
       <div className="space-y-8">
         {employee && (
           <section className="grid gap-4 lg:grid-cols-3">
+            {pickProjects && <Card title="Choose your projects" className="lg:col-span-3"
+              actions={<Link href={`${base}/projects`} className="btn-primary btn-sm">Choose projects</Link>}>
+              <p className="text-sm text-slate-600">Ask to join the projects you work on. The Owner or the Admin approves each one; you then see its tasks and chat.</p>
+            </Card>}
             <Card title="Today" actions={<Link href={`${base}/attendance/me`} className="text-xs font-medium text-brand-600 hover:text-brand-700">My attendance →</Link>}>
               <div className="flex items-center gap-3">
                 <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Fingerprint className="h-5 w-5" /></span>

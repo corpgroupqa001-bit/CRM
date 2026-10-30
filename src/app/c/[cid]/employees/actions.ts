@@ -384,27 +384,6 @@ export async function setEmployeePassword(cid: string, eid: string, _: ActionSta
   });
 }
 
-// Candidate sign-ups (migration 0021): approve once with the confirmed access role, or reject.
-export async function approveJoin(cid: string, id: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  return attempt(async () => {
-    const ctx = await getCtx(cid);
-    assertPerm(ctx, "employees.account", "employees.assign_role");
-    must(await ctx.supabase.rpc("approve_join_request", { p_request: id, p_role: str(fd, "role") }));
-    revalidatePath(`/c/${cid}/employees`, "layout");
-    return "Approved. They can sign in now.";
-  });
-}
-
-export async function rejectJoin(cid: string, id: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  return attempt(async () => {
-    const ctx = await getCtx(cid);
-    assertPerm(ctx, "employees.account");
-    must(await ctx.supabase.rpc("reject_join_request", { p_request: id, p_note: str(fd, "note") ?? null }));
-    revalidatePath(`/c/${cid}/employees/approvals`);
-    return "Rejected.";
-  });
-}
-
 // Removing an employee (Owner, HR): a record created by mistake (no login, no history) is deleted.
 // Anyone else is exited today, signed out of this company for good, and hidden from every list;
 // their attendance and payroll history stays for the retention period. Written to the audit log.
