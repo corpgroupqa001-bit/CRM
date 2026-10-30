@@ -8,7 +8,7 @@ export type Role = "owner" | "hr" | "manager" | "employee" | "super_admin";
 
 export const ROLE_LABEL: Record<Role, string> = {
   owner: "Owner", hr: "HR Manager", manager: "Manager", employee: "Employee",
-  super_admin: "Super Admin",
+  super_admin: "Admin",   // the Super Admin is the Admin (decision of 30 Oct, BRD §5.2)
 };
 
 /** roles the Owner can assign (the owner is fixed; super admin is platform-level, not a company role) */

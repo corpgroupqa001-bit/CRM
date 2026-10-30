@@ -23,12 +23,12 @@ export default async function Run({ params }: { params: Promise<{ cid: string; r
   const [{ data: rawSlips }, dir] = await Promise.all([supabase.from("payslips").select("*").eq("run_id", runId), directory(supabase, cid)]);
   const slips = (rawSlips ?? []).map((p) => ({ ...p, employees: dir.get(p.employee_id) ?? { first_name: "—", last_name: null, emp_code: "" } }));
   const rows = (slips ?? []).sort((a, b) => (a.employees as Emp).emp_code.localeCompare((b.employees as Emp).emp_code));
-  // the Owner approves, but never the person who ran this version (maker-checker);
-  // reopening a finalized run is for the Owner only
+  // the Owner or the Admin approves, but never the person who ran this version (maker-checker);
+  // reopening a finalized run is for the Owner or the Admin
   const canApprove = perms.has("salaries.approve");
   const canManage = perms.has("salaries.manage");     // HR: view only (approved BRD matrix)
   const ranIt = run.ran_by === user.id;
-  const canReopen = role === "owner";
+  const canReopen = role === "owner" || role === "super_admin";
   const dl = (report: string) => `/api/export/${report}?company=${cid}&run=${runId}`;
   const errors = (run.warnings as { level: string; message: string }[]).filter((w) => w.level === "error");
 
@@ -68,7 +68,7 @@ export default async function Run({ params }: { params: Promise<{ cid: string; r
             </ActionForm>
           ) : <p className="text-sm text-slate-600">{canApprove && ranIt
                 ? "You ran this payroll, so someone else must approve it."
-                : "Waiting for the Owner to approve."}</p>)
+                : "Waiting for the Owner or the Admin to approve."}</p>)
             : run.status === "locked" ? <p className="text-sm text-emerald-700">Approved {fmtDateTime(run.approved_at)}. Finalized and read-only.</p>
             : <p className="text-sm text-slate-500">{run.status === "reopened" ? `Reopened: ${run.reopen_reason}` : "Superseded by a newer run."}</p>}
         </Card>

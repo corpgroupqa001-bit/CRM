@@ -251,19 +251,19 @@ export async function approveRun(cid: string, runId: string, _: ActionState): Pr
 
 ## 7. Roles and permissions
 
-Every user has one role **per company** in `company_members.role`: `owner`, `hr` (HR / Payroll), `manager` or `employee`. **Decision of 30 Oct 2026 (beyond BRD v2.0 §5.2, migration 0051): there is no Company Admin.** The Owner does everything it did, and the platform Super Admin is the only admin; people who were Company Admin became Super Admins and Employees in their company. A company's owner never changes. Designation, department, manager, company and status are separate fields and grant nothing. Super Admin is platform-level (`platform_admins`, granted only in SQL) and is not a company role: it manages tenants and subscriptions and, by **decision of 30 Oct 2026 (0052, beyond the BRD's "no default access")**, acts as an administrator in every company without a grant: employees (incl. logins and roles), attendance (incl. approvals and month unlock), devices, leave types and balances, settings and policies, roles, projects, tasks and announcements. Never: approving or rejecting leave (refused by the database), salaries and payroll, bank / PAN / statutory details, the audit log, or chat where it doesn't work. Everything it does is audited (`audit_log.via_super_admin`). Settings → Support access was removed.
+Every user has one role **per company** in `company_members.role`: `owner`, `hr` (HR / Payroll), `manager` or `employee`; the **Admin** is the platform Super Admin (`platform_admins`), administrator of every company (decisions of 30 Oct, 0052 and 0055). **Decision of 30 Oct 2026 (beyond BRD v2.0 §5.2, migration 0051): there is no Company Admin.** The Owner does everything it did, and the platform Super Admin is the only admin; people who were Company Admin became Super Admins and Employees in their company. A company's owner never changes. Designation, department, manager, company and status are separate fields and grant nothing. Super Admin is platform-level (`platform_admins`, granted only in SQL) and is not a company role: it manages tenants and subscriptions and, by **decision of 30 Oct 2026 (0052, beyond the BRD's "no default access")**, acts as an administrator in every company without a grant: employees (incl. logins and roles), attendance (incl. approvals and month unlock), devices, leave types and balances, settings and policies, roles, projects, tasks and announcements. Never: approving or rejecting leave (refused by the database), salaries and payroll, bank / PAN / statutory details, the audit log, or chat where it doesn't work. Everything it does is audited (`audit_log.via_super_admin`). Settings → Support access was removed.
 
-| Area | Owner | HR / Payroll (`hr`) | Manager | Employee |
-|---|---|---|---|---|
-| Companies | Edit profile; more companies are created by the Super Admin | Read | Read | Read |
-| Projects | Full | Read all | Read; update the projects they manage | Member projects (read) |
-| Employees | Full, incl. system roles | Create, read, update, delete, invite, logins (no system roles) | Own team (read) | Own profile (read, update contact fields) |
-| Attendance | Full; the only role that unlocks a month | Full (no unlock) | Team: read, approve | Own; punch on the device |
-| Leave | Full | Full | Team: read, approve | Apply, read own |
-| Salaries / Payroll | Read, approve, reopen | Prepare: structures, CTC, inputs, run, bank file | Own payslips | Own payslips |
-| Tasks | Full | Full | Full for their team | Assigned tasks; create tasks for themselves |
-| Settings, roles and audit log | Full (incl. Sign-in security, support access) | Read | None | None |
-| Chat | Yes, plus chat controls | Yes | Yes | Yes |
+| Area | Owner | Admin (= Super Admin) | HR / Payroll (`hr`) | Manager | Employee |
+|---|---|---|---|---|---|
+| Companies | Edit profile; more companies are created by the Super Admin | Read, edit all companies | Read | Read | Read |
+| Projects | Full | Full | Read all | Read; update the projects they manage | Member projects (read) |
+| Employees | Full, incl. system roles | Full, incl. system roles | Create, read, update, delete, invite, logins (no system roles) | Own team (read) | Own profile (read, update contact fields) |
+| Attendance | Read | Full; the only role that unlocks a month; devices | Full (no unlock) | Team: read, approve | Own; punch on the device |
+| Leave | Read | Full, incl. approvals | Full | Team: read, approve | Apply, read own |
+| Salaries / Payroll | Read, approve, reopen | Read, approve, reopen | Prepare: structures, CTC, inputs, run, bank file | Own payslips | Own payslips |
+| Tasks | Full | Full | Full | Full for their team | Assigned tasks; create tasks for themselves |
+| Settings, roles and audit log | Read; manages roles | Full (incl. Sign-in security) | Read | None | None |
+| Chat | Yes | Yes, plus chat controls | Yes | Yes | Yes |
 
 - **Payroll:** HR / Payroll prepares and runs payroll; the Owner approves (`salaries.approve`), never the person who ran that run (maker-checker). Employees and managers read their own approved payslips under **My payslips**.
 - **Sign-up:** owners sign up with name, email and company name and become that company's Owner (`create_company_for`, 0028); an owner adds further companies from `/owner` or the company switcher. Employees don't self-register: HR adds them and sends an invitation (`join_requests` only keeps requests made before 0028).

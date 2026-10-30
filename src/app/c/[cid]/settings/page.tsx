@@ -163,12 +163,10 @@ export default async function Settings({ params, searchParams }: { params: Promi
     body = (
       <div className="space-y-6">
         <Card title="Branches / work locations" pad={false}>
-          <Table head={["Name", "Address", "Location", "Geofence", ""]}>
+          <Table head={["Name", "Address", ""]}>
             {(branches ?? []).map((b) => (
               <tr key={b.id}>
                 <td className="td font-medium">{b.name}</td><td className="td">{b.address}</td>
-                <td className="td text-xs">{b.lat != null ? `${b.lat}, ${b.lng}` : <span className="text-slate-500">Not set</span>}</td>
-                <td className="td">{b.geofence_m} m</td>
                 <td className="td text-right">{admin && <form action={deleteRow.bind(null, cid, "branches", b.id)}><button className="text-sm text-rose-600">Delete</button></form>}</td>
               </tr>
             ))}
@@ -179,10 +177,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             <ActionForm action={saveBranch.bind(null, cid)} className="grid gap-4 md:grid-cols-3" resetOnSuccess>
               <Field label="Name"><input className="input" name="name" required /></Field>
               <Field label="State"><input className="input" name="state" /></Field>
-              <Field label="Geofence radius (m)"><input className="input" name="geofence_m" type="number" defaultValue={200} min={20} /></Field>
               <Field label="Address" className="md:col-span-3"><input className="input" name="address" /></Field>
-              <Field label="Latitude" hint="From Google Maps: right-click → copy coordinates"><input className="input" name="lat" type="number" step="any" /></Field>
-              <Field label="Longitude"><input className="input" name="lng" type="number" step="any" /></Field>
               <div className="md:col-span-3"><SubmitButton>Add branch</SubmitButton></div>
             </ActionForm>
           </Card>
@@ -280,7 +275,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
     const canMap = perms.has("employees.assign_role");
     const access = canMap && (
       <Card title="Access by designation" className="md:col-span-2"
-        description="When a new candidate signs up with a designation, the Owner approving them starts from this role (and can change it). A designation never grants access without that approval.">
+        description="When a new candidate signs up with a designation, the Owner or the Admin approving them starts from this role (and can change it). A designation never grants access without that approval.">
         <Table head={["Designation", "Department", "Access role on approval"]} empty="Add designations above first.">
           {desigs.filter((d) => d.active).map((d) => (
             <tr key={d.id}><td className="td font-medium">{d.name}</td>
@@ -332,7 +327,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
     body = (
       <div className="space-y-6">
       {/* AUTH-02, on its own at the top so it is easy to find (decision of 29 Oct) */}
-      <Card title="Sign-in security" description="Five wrong passwords within 15 minutes lock the login. The Owner and HR can unlock it sooner from Employees → name → Login & access → Unlock now.">
+      <Card title="Sign-in security" description="Five wrong passwords within 15 minutes lock the login. The Admin, the Owner and HR can unlock it sooner from Employees → name → Login & access → Unlock now.">
         <ActionForm action={saveSignInSecurity.bind(null, cid)} className="flex flex-wrap items-end gap-3">
           <Field label="Lock the login for" hint="Someone in several companies gets the longest lock time." className="min-w-0 flex-[0_1_280px]">
             <select className="input" name="lockout_minutes" defaultValue={company.lockout_minutes} disabled={!admin}>
@@ -358,7 +353,6 @@ export default async function Settings({ params, searchParams }: { params: Promi
               <Field label="Overtime multiplier"><input className="input" name="ot_multiplier" type="number" step="0.25" min={1} defaultValue={company.ot_multiplier} /></Field>
               <Field label="Late marks that make a half-day" hint="0 turns the rule off"><input className="input" name="late_marks_to_half_day" type="number" min={0} defaultValue={company.late_marks_to_half_day} /></Field>
               <Field label="Missed check-out after (hours past shift end)" hint="A day with an in-punch and no out-punch is flagged then and the employee is asked to request a correction (ATT-36)"><input className="input" name="missed_out_grace_hours" type="number" min={0} max={12} defaultValue={company.missed_out_grace_hours ?? 2} /></Field>
-              <Field label="Keep attendance selfies for (days)" hint="Older selfies are deleted automatically (ATT-25)"><input className="input" name="selfie_retention_days" type="number" min={1} max={3650} defaultValue={company.selfie_retention_days ?? 90} /></Field>
               <label className="flex items-center gap-2 pt-6 text-sm md:col-span-2"><input type="checkbox" name="sandwich_paid" defaultChecked={company.sandwich_paid} />
                 Pay a weekly off / holiday that falls between two LOP days (sandwich rule)</label>
               <label className="flex items-start gap-2 text-sm md:col-span-3"><input type="checkbox" name="payslip_password" defaultChecked={company.payslip_password} className="mt-0.5" />
@@ -367,7 +361,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             <div>
               <div className="label">Payable value of each daily status (1 = full day, 0.5 = half, 0 = LOP)</div>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                {Object.keys(m).map((s) => (
+                {Object.keys(m).filter((s) => s !== "wfh").map((s) => (
                   <Field key={s} label={label(s)}><select className="input" name={`map_${s}`} defaultValue={String(m[s])}>
                     <option value="1">1</option><option value="0.5">0.5</option><option value="0">0</option></select></Field>
                 ))}
@@ -465,7 +459,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             </ActionForm>
           </Card>
         ) : (
-          <p className="text-sm text-slate-500">View only. The Owner creates and changes roles.</p>
+          <p className="text-sm text-slate-500">View only. The Owner or the Admin creates and changes roles.</p>
         )}
         <Card title="Roles" pad={false}>
           <Table head={["Role", "Type", "Copied from", "Permissions", "People", ""]}>
@@ -548,7 +542,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
                   .map((k) => `${k}: ${JSON.stringify(l.old_data[k])} → ${JSON.stringify(l.new_data[k])}`).join("; ")
               : l.action === "unlock" || l.action === "reopen" ? `reason: ${l.new_data?.reason}` : "";
             return (
-              <tr key={l.id}><td className="td whitespace-nowrap">{fmtDateTime(l.at)}</td><td className="td">{l.user_id ? who.get(l.user_id) ?? "user" : "system"}{l.via_super_admin && <> <Badge value="super_admin" text="Super Admin" /></>}</td>
+              <tr key={l.id}><td className="td whitespace-nowrap">{fmtDateTime(l.at)}</td><td className="td">{l.user_id ? who.get(l.user_id) ?? "user" : "system"}{l.via_super_admin && <> <Badge value="super_admin" text="Admin" /></>}</td>
                 <td className="td">{l.table_name}</td><td className="td">{l.action}</td>
                 <td className="td max-w-md truncate text-xs text-slate-500" title={changed}>{changed}</td><td className="td text-xs">{l.ip}</td></tr>
             );
@@ -566,7 +560,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
       <Tabs tabs={tabs} active={tab} />
       {readOnly ? (
         <>
-          <p className="mb-4 text-sm text-slate-500">View only. The Owner changes these.</p>
+          <p className="mb-4 text-sm text-slate-500">View only. The Admin changes these.</p>
           <fieldset disabled className="contents [&_button]:hidden">{body}</fieldset>
         </>
       ) : body}

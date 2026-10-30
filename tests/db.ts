@@ -74,3 +74,11 @@ export async function addMember(db: PGlite, companyId: string, email: string, ro
   await db.query(`insert into public.company_members (company_id, user_id, role) values ($1, $2, $3)`, [companyId, id, role]);
   return id;
 }
+
+/** The Admin (BRD §5.2): the platform Super Admin, the one administrator of every company (decisions of
+ *  30 Oct 2026, 0052 and 0055). Returns their user id. */
+export async function addAdmin(db: PGlite, email = "admin@platform.in") {
+  const id = await createUser(db, email);
+  await db.query(`insert into public.platform_admins (user_id) values ($1)`, [id]);
+  return id;
+}

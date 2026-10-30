@@ -18,8 +18,7 @@ export default async function Leave({ params, searchParams }: { params: Promise<
   // Leave Management is outside Phase 1 (enabled only through platform_features)
   if (!leaveEnabled(ctx.perms)) redirect(`/c/${cid}/denied`);
   const { supabase, perms, employee } = ctx;
-  // the Super Admin never approves or rejects leave (decision of 30 Oct, 0052; the database refuses it too)
-  const approver = perms.has("attendance.approve") && ctx.role !== "super_admin";
+  const approver = perms.has("attendance.approve");
   const year = Number(todayIST().slice(0, 4));
   const base = `/c/${cid}/leave`;
   const tabs = [

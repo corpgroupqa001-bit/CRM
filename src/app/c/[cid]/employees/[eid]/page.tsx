@@ -48,8 +48,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     // everything about signing in, in one place (decision of 29 Oct)
     ...(acct ? [{ key: "access", label: "Login & access", href: `${base}?tab=access` }] : []),
     ...(hr ? [{ key: "job", label: "Job", href: `${base}?tab=job` }] : []),
-    // bank, PAN and statutory details are payroll data: not for the Super Admin (decision of 30 Oct)
-    ...(ctx.role !== "super_admin" ? [{ key: "statutory", label: "Statutory & bank", href: `${base}?tab=statutory` }] : []),
+    { key: "statutory", label: "Statutory & bank", href: `${base}?tab=statutory` },
     { key: "documents", label: "Documents", href: `${base}?tab=documents` },
     ...(perms.has("attendance.manage") ? [{ key: "devices", label: "Biometric IDs", href: `${base}?tab=devices` }] : []),
     ...(perms.has("salaries.read") ? [{ key: "salary", label: "Salary", href: `${base}?tab=salary` }] : []),
@@ -92,7 +91,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     );
   }
 
-  if (tab === "statutory" && ctx.role !== "super_admin") {
+  if (tab === "statutory") {
     const { data: reqs } = await supabase.from("employee_change_requests").select("*").eq("employee_id", eid).order("created_at", { ascending: false }).limit(5);
     body = (
       <div className="space-y-6">

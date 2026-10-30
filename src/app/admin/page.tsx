@@ -23,7 +23,7 @@ export const metadata = { title: "Platform admin" };
 // runs. Creating a company uses the server-only service client after that check
 // (the key never reaches the browser) and is written to the audit log. "Open" enters a company in
 // the company app, where the Super Admin acts as an administrator in every company (decision of 30 Oct,
-// 0052; not payroll or leave approvals); every visit and write is audited.
+// 0052 and 0055, with the BRD Admin rights); every visit and write is audited.
 //
 // The portal has its own session (lib/supabase/scopes.ts: cookie on path /admin), separate from the
 // company session, so a Super Admin and an employee can be signed in at once in one browser.
@@ -153,7 +153,7 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
             return (
               <tr key={c.id} className="align-top">
                 <td className="td font-medium text-slate-900">{c.name}<div className="text-xs font-normal text-slate-500">since {fmtDate(c.created_at)}</div>
-                  <a href={`/c/${c.id}/dashboard`} className="text-xs font-medium text-brand-600 hover:underline" title="Opens the company as its administrator (not payroll, bank details or leave approvals)">Open →</a></td>
+                  <a href={`/c/${c.id}/dashboard`} className="text-xs font-medium text-brand-600 hover:underline" title="Opens the company as its Admin">Open →</a></td>
                 <td className="td text-xs">{c.owner_email ?? "—"}</td>
                 <td className={`td tabular-nums ${over ? "font-semibold text-rose-600" : ""}`}>{c.active_employees}{c.employee_limit ? ` / ${c.employee_limit}` : ""}</td>
                 <td className="td">
@@ -174,7 +174,7 @@ export default async function PlatformAdmin({ searchParams }: { searchParams: Pr
       <p className="mt-4 text-xs text-slate-500">
         A company&apos;s owner is set when it is created and never changes; there are no company administrators.
         Super admins are granted only by the platform operator (see README → Super Admin). Opening a company is recorded in its audit log.
-        &ldquo;Open&rdquo; goes to the company app, which has its own sign-in: the admin portal&apos;s session is separate. There you act as an administrator: employees, attendance, devices, leave types, settings, roles, projects, tasks and announcements; never payroll, bank details, the audit log or leave approvals. Everything you change is in that company&apos;s audit log.
+        &ldquo;Open&rdquo; goes to the company app, which has its own sign-in: the admin portal&apos;s session is separate. There you are the company&apos;s Admin (BRD §5.3): settings, policies, devices, roles, employees, attendance, leave and approving payroll (never a run you prepared). Everything you change is in that company&apos;s audit log.
       </p>
     </main>
   );

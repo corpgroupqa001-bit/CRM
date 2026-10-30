@@ -51,7 +51,7 @@ describe("failed payroll", () => {
   it("payroll failures are visible to payroll roles; ingestion to attendance roles; never to employees", async () => {
     const seen = async (u: string) => (await asUser(db, u, async () => (await db.query<{ kind: string }>(`select kind from system_failures order by id`)).rows)).map((r) => r.kind);
     expect(await seen(hr)).toEqual(["ingestion", "ingestion", "payroll"]);
-    expect(await seen(owner)).toEqual(["ingestion", "ingestion", "payroll"]);   // the Owner now manages attendance too
+    expect(await seen(owner)).toEqual(["payroll"]);              // Owner: Salaries R, Attendance R (no attendance.manage)
     expect(await seen(emp)).toEqual([]);
   });
   it("only the server can record failures", async () => {

@@ -79,7 +79,7 @@ export const isLockedOut = async (email: string) => (await lockStatus(email)) !=
 
 /** the message a locked-out person sees */
 export const lockedMessage = (until: Date, extra = "") =>
-  `Too many wrong passwords. Try again after ${lockTimeText(until)}${extra}, or ask your company's Owner or HR to unlock your account.`;
+  `Too many wrong passwords. Try again after ${lockTimeText(until)}${extra}, or ask HR, your company's Owner or the Admin to unlock your account.`;
 
 export async function recordAttempt(email: string, success: boolean) {
   await createAdminClient().from("login_attempts").insert({ email, success, ip: await clientIp() });

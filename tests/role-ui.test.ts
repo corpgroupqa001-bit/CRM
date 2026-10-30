@@ -50,10 +50,10 @@ describe("navigation per role (BRD v2.0 §5.3)", () => {
     expect(perms.hr.has("settings.manage")).toBe(false);
   });
 
-  it("the Owner sees every module; the Super Admin every one but Payroll (decision of 30 Oct)", () => {
-    for (const shown of ["Employees", "Attendance", "Payroll", "Tasks", "Chat", "Settings", "Leave"]) expect(nav("owner")).toContain(shown);
-    for (const shown of ["Employees", "Attendance", "Tasks", "Settings", "Leave"]) expect(nav("super_admin")).toContain(shown);
-    expect(nav("super_admin")).not.toContain("Payroll");
+  it("the Owner and the Admin (the Super Admin, 0055) see every module", () => {
+    for (const r of ["owner", "super_admin"]) {
+      for (const shown of ["Employees", "Attendance", "Payroll", "Tasks", "Chat", "Settings", "Leave"]) expect(nav(r), r).toContain(shown);
+    }
   });
 });
 
@@ -64,9 +64,9 @@ describe("actions and exports per role", () => {
     expect(pick("employees.account")).toEqual(["owner", "hr", "super_admin"]);      // AUTH-04: HR invites
     expect(pick("employees.assign_role")).toEqual(["owner", "super_admin"]);
     expect(pick("salaries.manage")).toEqual(["hr"]);                                                   // HR / Payroll prepares
-    expect(pick("salaries.approve")).toEqual(["owner"]);                                               // SAL-09
-    expect(pick("attendance.manage")).toEqual(["owner", "hr", "super_admin"]);                         // the Owner took over the Company Admin's
-    expect(pick("settings.manage")).toEqual(["owner", "super_admin"]);
+    expect(pick("salaries.approve")).toEqual(["owner", "super_admin"]);                                // SAL-09: Owner or Admin
+    expect(pick("attendance.manage")).toEqual(["hr", "super_admin"]);                                  // Owner: Attendance R
+    expect(pick("settings.manage")).toEqual(["super_admin"]);                                          // Owner: Settings R
   });
 
   it("payroll exports: none for Employee or Manager; HR / Payroll has the bank file; the Owner the reports", () => {

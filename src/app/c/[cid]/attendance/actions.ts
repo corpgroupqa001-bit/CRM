@@ -177,27 +177,4 @@ export async function bulkRegularisations(cid: string, _: ActionState, fd: FormD
 
 // Work from home and mobile punch were removed on 30 Oct 2026 (0054): attendance is on site only.
 
-// Selfie flags (decision 27 Oct 2026): HR or the reporting manager flags, the employee explains, then it is closed
-export async function flagSelfie(cid: string, source: string, ref: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  return attempt(async () => {
-    const { supabase } = await getCtx(cid);
-    must(await supabase.rpc("flag_selfie", { p_source: source, p_ref: ref, p_reason: str(fd, "reason"), p_note: str(fd, "note") }));
-    rv(cid);
-    return "Selfie flagged. The employee has been asked to explain.";
-  });
-}
-
-export async function explainSelfieFlag(cid: string, id: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  return attempt(async () => {
-    const { supabase } = await getCtx(cid);
-    must(await supabase.rpc("explain_selfie_flag", { p_id: id, p_text: str(fd, "explanation") }));
-    rv(cid);
-    return "Explanation sent.";
-  });
-}
-
-export async function closeSelfieFlag(cid: string, id: string, upheld: boolean) {
-  const { supabase } = await getCtx(cid);
-  must(await supabase.rpc("close_selfie_flag", { p_id: id, p_upheld: upheld, p_note: null }));
-  rv(cid);
-}
+// Selfies and selfie flags were removed with work from home and mobile punch on 30 Oct 2026 (0054).

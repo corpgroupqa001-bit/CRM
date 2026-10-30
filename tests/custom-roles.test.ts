@@ -34,7 +34,7 @@ describe("§5.2 · who manages custom roles", () => {
   it("the Owner copies roles (decision of 27 Oct, 0039); HR (Settings R) can't", async () => {
     expect(await clone(owner, "Admin's copy", "manager")).toBeTruthy();
     expect(await clone(owner, "Owner's copy", "employee")).toBeTruthy();
-    await expect(clone(hr, "HR copy", "hr")).rejects.toThrow(/Only the Owner can manage roles/);
+    await expect(clone(hr, "HR copy", "hr")).rejects.toThrow(/Only the Owner or the Admin can manage roles/);
     expect((await access(owner)).permissions).toContain("roles.manage");
   });
 
@@ -129,14 +129,13 @@ describe("§5.2 · assigning and removing custom roles", () => {
     expect(await sys(`select 1 from company_roles where id = $1`, [sup])).toHaveLength(0);
   });
 
-  it("only the Owner grants platform support access, not even a custom role with Settings", async () => {
+  it("a custom role can be given an Admin-only permission such as Settings (0055)", async () => {
     const withSettings = await clone(owner, "HR with settings", "hr");
     const cur = (await sys<{ permission: string }>(`select permission from company_role_permissions where role_id = $1`, [withSettings])).map((r) => r.permission);
-    await as(owner, `select save_role($1, 'HR with settings', $2)`, [withSettings, [...cur, "settings.manage"]]);
+    await as(owner, `select save_role($1, 'HR with settings', $2)`, [withSettings, [...cur, "settings.manage", "attendance.unlock"]]);
     const u = await addMember(db, cid, "hr2@corp.in", "hr");
     await sys(`update company_members set custom_role_id = $1 where company_id = $2 and user_id = $3`, [withSettings, cid, u]);
-    await expect(as(u, `select grant_support_access($1, 4, 'ticket 1')`, [cid])).rejects.toThrow(/Only the Owner/);
-    expect(await as(owner, `select grant_support_access($1, 4, 'ticket 1') id`, [cid])).toHaveLength(1);
+    expect(await as(u, `select has_perm($1, 'settings.manage') ok`, [cid])).toEqual([{ ok: true }]);
   });
 });
 
@@ -170,7 +169,7 @@ describe("view and edit every role (decision of 27 Oct 2026, migration 0038)", (
   it("the Owner edits; HR can't, and the Owner role can't be edited", async () => {
     await as(owner, `select save_default_role($1, 'employee', array['chat.use','tasks.use'])`, [cid]);
     await as(owner, `select reset_default_role($1, 'employee')`, [cid]);
-    await expect(as(hr, `select save_default_role($1, 'employee', array['chat.use'])`, [cid])).rejects.toThrow(/Only the Owner can change roles/);
+    await expect(as(hr, `select save_default_role($1, 'employee', array['chat.use'])`, [cid])).rejects.toThrow(/Only the Owner or the Admin can change roles/);
     await expect(as(owner, `select save_default_role($1, 'owner', array['chat.use'])`, [cid])).rejects.toThrow(/Owner role can't be changed/);
     await expect(as(owner, `insert into company_default_roles (company_id, role, permissions) values ($1, 'hr', '{}')`, [cid])).rejects.toThrow();
   });

@@ -139,11 +139,12 @@ async function seed() {
   const owner = await as("owner");
   must(await owner.rpc("approve_payroll", { p_run: run }));
 
-  // Arun is the platform Super Admin and an Employee here (no Company Admin role since 30 Oct, 0051)
+  // Arun is the Admin: the platform Super Admin, administrator of every company (BRD §5.2; 0052, 0055),
+  // and an Employee here
   must(await db.from("platform_admins").upsert({ user_id: U.admin, note: "staging demo" }));
 
   // a biometric device at the gate; Sita (on-site) punched in and out this morning (ATT-02/04)
-  const admin = owner;
+  const admin = await as("admin");   // devices: the Admin
   const dev = must(await admin.rpc("register_device", { p_company: cid, p_branch: null, p_name: "Main gate (demo)", p_serial: "DEMO-GATE-1", p_vendor: "ZKTeco", p_model: "K40", p_ip: null, p_mode: "push" })).device_id;
   must(await admin.rpc("map_device_user", { p_device: dev, p_device_user_id: "102", p_emp: E.sita }));
   const day = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
@@ -161,7 +162,7 @@ function printLogins() {
   console.log(`
 Sign in at http://localhost:3001 (company: Demo Industries), password Demo@12345:
   Owner          owner@demo.test     (also owns Demo Logistics)
-  Employee       admin@demo.test     (Arun: also the platform Super Admin, http://localhost:3001/admin)
+  Admin          admin@demo.test     (Arun: the Super Admin = Admin of every company; also an Employee; /admin portal)
   HR / Payroll   hr@demo.test
   Manager        manager@demo.test   (manages Ravi and Sita)
   Employee       ravi@demo.test      (September payslip)

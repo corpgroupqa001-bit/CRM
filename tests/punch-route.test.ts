@@ -3,7 +3,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
-import { asOwnerUser, createDb, createUser } from "./db";
+import { addAdmin, asOwnerUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 
@@ -48,7 +48,7 @@ beforeAll(async () => {
   const owner = await createUser(db, "owner@acme.in");
   const [{ id: cid }] = (await asOwnerUser(db, owner, () => db.query<{ id: string }>(
     `insert into companies (owner_id, name) values ($1, 'Acme') returning id`, [owner]))).rows;
-  const admin = owner;   // devices: the Owner (Company Admin removed, decision of 30 Oct)
+  const admin = await addAdmin(db);   // devices: the Admin (BRD §5.3; the Super Admin, 0055)
   emp = (await asOwnerUser(db, admin, () => db.query<{ id: string }>(
     `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'Ravi', 'ravi@acme.in', '2025-01-01') returning id`, [cid]))).rows[0].id;
   device = (await asOwnerUser(db, admin, () => db.query<{ r: typeof device }>(

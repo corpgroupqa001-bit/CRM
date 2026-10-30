@@ -1,11 +1,11 @@
 # BRD coverage — corpgroup.com
 
-Checked against *BRD – CRM & Workforce Management Platform* **v2.0** (26 Oct 2026), 27 Oct 2026, after migrations 0027–0030.
+Checked against *BRD – CRM & Workforce Management Platform* **v2.0** (26 Oct 2026, revised 30 Oct: single Admin, on site only), 27 Oct 2026, after migrations 0027–0030.
 ✅ built · ◐ built with a stated limit · ✗ not built (with reason)
 
 Database rules marked † are covered by automated tests (`pnpm test`, 233 tests on the real migrations).
 
-**Decision of 30 Oct 2026 (beyond BRD v2.0 §5.2, which lists six roles): the Company Admin role is removed (0051).** The roles are Super Admin, Owner, HR / Payroll, Manager and Employee. The Owner does everything the Company Admin did (settings, policies, devices, roles, unlocking months, support access, approving payroll); the Super Admin is the only admin and manages companies from `/admin`; a company's owner never changes. Where rows below still say Company Admin, read Owner. **Also 30 Oct (0052):** the Super Admin is an administrator in every company without a support-access grant (employees, attendance, devices, leave types, settings, roles, projects, tasks, announcements), never payroll, bank details, the audit log or leave approvals; Settings → Support access is removed.
+**Decision of 30 Oct 2026 (beyond BRD v2.0 §5.2, which lists six roles): the Company Admin role is removed (0051).** The roles are Super Admin, Owner, HR / Payroll, Manager and Employee. The Owner does everything the Company Admin did (settings, policies, devices, roles, unlocking months, support access, approving payroll); the Super Admin is the only admin and manages companies from `/admin`; a company's owner never changes. Where rows below still say Company Admin, read Owner. **Also 30 Oct (0052, 0055):** the revised BRD has one **Admin** for all companies; by the user's decision the Super Admin **is** that Admin, with the BRD Admin column in every company (settings, policies, devices, roles, employees incl. bank details, attendance incl. month unlock, leave incl. approvals, salaries read and approve, audit log, chat), no support-access grant needed (Settings → Support access removed). The Owner has the BRD Owner column (attendance, leave and settings read; approves payroll) plus managing roles (27 Oct). Branches have no GPS or geofence (COM-02); selfies and selfie flags are gone with WFH.
 
 ## AUTH — sign-up / login
 | ID | Status | Where / note |

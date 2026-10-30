@@ -31,7 +31,7 @@ export default async function Approvals({ params }: { params: Promise<{ cid: str
       <PageHeader title="Approvals" />
       <AttendanceTabs cid={cid} active="requests" perms={ctx.perms} />
       <div className="space-y-6">
-        {leaveEnabled(ctx.perms) && ctx.role !== "super_admin" && (leave ?? 0) > 0 && <p className="text-sm"><Link href={`/c/${cid}/leave?tab=approvals`} className="font-medium text-brand-600 hover:underline">{leave} leave request(s) waiting →</Link></p>}
+        {leaveEnabled(ctx.perms) && (leave ?? 0) > 0 && <p className="text-sm"><Link href={`/c/${cid}/leave?tab=approvals`} className="font-medium text-brand-600 hover:underline">{leave} leave request(s) waiting →</Link></p>}
         <Card title="Attendance corrections" pad={false} actions={others(regs).length > 0 && (
           <ActionForm id="bulk-reg" action={bulkRegularisations.bind(null, cid)} className="flex items-center gap-2" confirm="Apply this decision to all selected corrections?">
             <span className="text-xs text-slate-500">Selected:</span>

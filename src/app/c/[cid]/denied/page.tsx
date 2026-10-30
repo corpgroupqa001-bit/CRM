@@ -13,7 +13,7 @@ export default async function Denied({ params }: { params: Promise<{ cid: string
   return (
     <Empty title="You don't have access to this page" icon={ShieldAlert}
       action={<Link href={`/c/${cid}/dashboard`} className="btn-primary">Back to dashboard</Link>}>
-      Your role here is <b>{ROLE_LABEL[role]}</b>, which doesn&apos;t include this area. If you need it for your work, ask your company&apos;s Owner.
+      Your role here is <b>{ROLE_LABEL[role]}</b>, which doesn&apos;t include this area. If you need it for your work, ask your company&apos;s Owner or the Admin.
     </Empty>
   );
 }

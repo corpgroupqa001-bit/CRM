@@ -59,8 +59,8 @@ export async function approveRun(cid: string, runId: string, _: ActionState): Pr
 export async function reopenRun(cid: string, runId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   return attempt(async () => {
     const ctx = await getCtx(cid);
-    // the Owner only (not HR, not Super Admin); the database also checks the typed month
-    if (ctx.role !== "owner") throw new Error("Only the Owner can reopen payroll.");
+    // the Owner or the Admin (the Super Admin, BRD §5.3, 0055), not HR; the database also checks the typed month
+    if (!["owner", "super_admin"].includes(ctx.role)) throw new Error("Only the Owner or the Admin can reopen payroll.");
     const { supabase } = ctx;
     must(await supabase.rpc("reopen_payroll", { p_run: runId, p_reason: str(fd, "reason"), p_confirm: str(fd, "confirm") }));
     rv(cid);

@@ -23,7 +23,7 @@ export async function saveProject(cid: string, _: ActionState, fd: FormData): Pr
       start_date: str(fd, "start_date"), end_date: str(fd, "end_date"), manager_id: str(fd, "manager_id"), status: str(fd, "status") ?? "planned",
     };
     if (!row.name) throw new Error("Project name is required.");
-    if (!id && !ctx.perms.has("projects.manage_all")) throw new Error("Only the Owner can create projects.");
+    if (!id && !ctx.perms.has("projects.manage_all")) throw new Error("Only the Owner or the Admin can create projects.");
     // a Manager's projects stay led by them
     if (!ctx.perms.has("projects.manage_all")) {
       if (!ctx.employee) throw new Error("You need an employee record to lead a project.");

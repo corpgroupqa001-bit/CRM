@@ -1,7 +1,7 @@
 // Migration 0011: the remaining BRD features, exercised against the real SQL.
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { addMember, asOwnerUser, asUser, createDb, createUser } from "./db";
+import { addAdmin, addMember, asOwnerUser, asUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 let owner: string, staff: string, other: string;
@@ -97,11 +97,12 @@ describe("chat", () => {
     expect(await as(staff, `select * from message_stars`)).toHaveLength(0);
   });
 
-  it("COMMS-12: only the Owner can export a conversation, and it is logged", async () => {
+  it("COMMS-12: only the Admin can export a conversation, and it is logged", async () => {
     const [{ open_dm: conv }] = await as<{ open_dm: string }>(staff, `select open_dm($1, $2)`, [cid, other]);
     await expect(as(staff, `select * from export_conversation($1)`, [conv])).rejects.toThrow(/not allowed/);
     await expect(as(other, `select * from export_conversation($1)`, [conv])).rejects.toThrow(/not allowed/);
-    const rows = await as(owner, `select * from export_conversation($1)`, [conv]);   // the Owner (settings), since 30 Oct
+    await expect(as(owner, `select * from export_conversation($1)`, [conv])).rejects.toThrow(/not allowed/);   // Owner: Settings R
+    const rows = await as(await addAdmin(db), `select * from export_conversation($1)`, [conv]);   // the Admin (0055)
     expect(rows.length).toBeGreaterThan(0);
     expect(await sys(owner, `select * from audit_log where action = 'export'`)).toHaveLength(1);
   });

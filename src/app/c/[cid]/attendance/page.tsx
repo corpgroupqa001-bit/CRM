@@ -9,7 +9,7 @@ import { overrideStatus, recompute } from "./actions";
 
 export const metadata = { title: "Attendance" };
 
-const STATUSES = ["present", "absent", "half_day", "late", "early_out", "on_duty", "wfh", "holiday", "weekly_off", "missed_punch"];
+const STATUSES = ["present", "absent", "half_day", "late", "early_out", "on_duty", "holiday", "weekly_off", "missed_punch"];
 
 export default async function DailyAttendance({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: Promise<{ date?: string; department?: string; branch?: string }> }) {
   const { cid } = await params;

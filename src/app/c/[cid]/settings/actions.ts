@@ -38,8 +38,9 @@ export async function savePolicies(cid: string, _: ActionState, fd: FormData): P
     assertPerm(ctx, "settings.manage");
     const { supabase } = ctx;
     const weekly = fd.getAll("weekly_offs").map(Number);
-    const map: Record<string, number> = {};
-    for (const s of ["present", "late", "early_out", "on_duty", "wfh", "half_day", "holiday", "weekly_off", "absent", "missed_punch"]) {
+    // no work from home since 30 Oct (0054): its value is kept as it was, for past WFH days
+    const map: Record<string, number> = { wfh: Number(ctx.company.payable_map?.wfh ?? 1) };
+    for (const s of ["present", "late", "early_out", "on_duty", "half_day", "holiday", "weekly_off", "absent", "missed_punch"]) {
       map[s] = Number(fd.get(`map_${s}`) ?? 0);
     }
     must(await supabase.from("companies").update({
@@ -52,7 +53,6 @@ export async function savePolicies(cid: string, _: ActionState, fd: FormData): P
       payable_map: map,
       payslip_password: bool(fd, "payslip_password"),
       missed_out_grace_hours: numOrNull(fd, "missed_out_grace_hours") ?? 2,
-      selfie_retention_days: numOrNull(fd, "selfie_retention_days") ?? 90,
     }).eq("id", cid));
     return done(cid, "Policies saved.");
   });
@@ -70,7 +70,7 @@ export async function saveSignInSecurity(cid: string, _: ActionState, fd: FormDa
   });
 }
 
-// COM-02 branches with geofence
+// COM-02 branches: name, state and address (no GPS or geofence since 30 Oct: attendance is on site only)
 export async function saveBranch(cid: string, _: ActionState, fd: FormData): Promise<ActionState> {
   return attempt(async () => {
     const ctx = await getCtx(cid);
@@ -78,7 +78,6 @@ export async function saveBranch(cid: string, _: ActionState, fd: FormData): Pro
     const { supabase } = ctx;
     const row = {
       company_id: cid, name: str(fd, "name"), address: str(fd, "address"), state: str(fd, "state"),
-      lat: numOrNull(fd, "lat"), lng: numOrNull(fd, "lng"), geofence_m: numOrNull(fd, "geofence_m") ?? 200,
     };
     if (!row.name) throw new Error("Branch name is required.");
     const id = str(fd, "id");

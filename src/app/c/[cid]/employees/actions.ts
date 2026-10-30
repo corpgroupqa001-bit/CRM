@@ -92,7 +92,6 @@ export async function saveStatutory(cid: string, eid: string, _: ActionState, fd
   return attempt(async () => {
     const ctx = await getCtx(cid);
     const { supabase, employee } = ctx;
-    if (ctx.role === "super_admin") throw new Error("Bank, PAN and statutory details are not available to the Super Admin.");
     if (can(ctx, "employees.update")) {
       must(await supabase.from("employees").update(sensitive(fd)).eq("id", eid).eq("company_id", cid));
       revalidatePath(`/c/${cid}/employees/${eid}`);

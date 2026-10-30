@@ -58,7 +58,7 @@ export function JobFields({ e = {}, o, canSetRole = false }: { e?: Emp; o: JobOp
           <select className="input" name="invite_role" defaultValue={v("invite_role") || "employee"}>
             {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
       ) : (
-        <Field label="System role" hint="Set by the Owner"><input className="input" value={ROLE_LABEL[(v("invite_role") || "employee") as Role]} disabled /></Field>
+        <Field label="System role" hint="Set by the Owner or the Admin"><input className="input" value={ROLE_LABEL[(v("invite_role") || "employee") as Role]} disabled /></Field>
       )}
     </>
   );

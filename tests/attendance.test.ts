@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createHmac } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
-import { asOwnerUser, createDb, createUser } from "./db";
+import { addAdmin, asOwnerUser, createDb, createUser } from "./db";
 
 let db: PGlite;
 let owner: string;
@@ -36,6 +36,7 @@ beforeAll(async () => {
   owner = await createUser(db, "owner@acme.in");
   [{ id: company }] = await q<{ id: string }>(
     `insert into companies (owner_id, name, weekly_offs) values ($1, 'Acme', '{0}') returning id`, [owner]);
+  owner = await addAdmin(db);   // devices and attendance: the Admin (BRD §5.3; the Super Admin, 0055)
   await q(`update shifts set grace_min = 0 where company_id = $1`, [company]);   // 09:00–18:00, 0 min grace
   [{ id: emp }] = await q<{ id: string }>(
     `insert into employees (company_id, first_name, email, date_of_joining) values ($1, 'Ravi', 'ravi@acme.in', '2025-01-01') returning id`,
